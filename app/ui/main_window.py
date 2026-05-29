@@ -14,10 +14,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.calibrator import Calibrator
 from app.core.road_sampler import RoadSampler
-from app.models.scan_result import ScanSession
+from app.core.scanner import Scanner
+from app.models.scan_result import ScanPoint, ScanSession
 from app.ui.map_view import MapView
 from app.ui.scan_panel import ScanPanel
+from app.utils.paths import asset
 
 log = logging.getLogger(__name__)
 
@@ -29,7 +32,8 @@ class MainWindow(QMainWindow):
         self.resize(1280, 820)
 
         self._session = ScanSession()
-        self._scanner: object | None = None
+        self._calibrator = Calibrator()
+        self._scanner: Scanner | None = None
         self._scan_thread: QThread | None = None
         self._ref_map_path: str = ""
 
@@ -102,13 +106,58 @@ class MainWindow(QMainWindow):
         pass  # implemented in P3
 
     def _on_scan_start(self) -> None:
-        pass  # implemented in P4
+        if not self._calibrator.is_fitted:
+            QMessageBox.warning(
+                self,
+                "Not Calibrated",
+                "Please calibrate before scanning.",
+            )
+            return
+
+        ft_path = str(asset("ft_indicator.png")) if asset("ft_indicator.png").exists() else ""
+        self._scanner = Scanner(
+            points=self._session.points,
+            calibrator=self._calibrator,
+            ft_template_path=ft_path,
+        )
+        self._scan_thread = QThread()
+        self._scanner.moveToThread(self._scan_thread)
+        self._scanner.point_scanned.connect(self._on_point_scanned)
+        self._scanner.progress.connect(self._on_scan_progress)
+        self._scanner.finished.connect(self._on_scan_finished)
+        self._scan_thread.started.connect(self._scanner.run)
+        self._panel.set_scan_running(True)
+        self._panel.set_status("Scanning...")
+        self._scan_thread.start()
+        log.info("Scan started with %d points", len(self._session.points))
 
     def _on_scan_pause(self) -> None:
-        pass  # implemented in P4
+        if self._scanner:
+            self._scanner.pause()
+            self._panel.set_status("Paused.")
+            self._panel.set_scan_running(False, paused=True)
 
     def _on_scan_stop(self) -> None:
-        pass  # implemented in P4
+        if self._scanner:
+            self._scanner.stop()
+        self._panel.set_status("Stopped.")
+
+    def _on_point_scanned(self, point: ScanPoint) -> None:
+        self._map_view.update_point(point)
+
+    def _on_scan_progress(self, scanned: int) -> None:
+        s = self._session
+        self._panel.update_progress(scanned, s.total, s.discovered, s.undiscovered)
+
+    def _on_scan_finished(self) -> None:
+        if self._scan_thread:
+            self._scan_thread.quit()
+            self._scan_thread.wait()
+        self._panel.set_scan_running(False)
+        s = self._session
+        self._panel.set_status(f"Done - {s.undiscovered} undiscovered road(s) found.")
+        self._panel.update_progress(s.scanned, s.total, s.discovered, s.undiscovered)
+        log.info("Scan finished")
 
     def _on_jump_next(self) -> None:
         pass  # implemented in P5
@@ -125,7 +174,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        if self._scanner is not None and hasattr(self._scanner, "stop"):
+        if self._scanner is not None:
             self._scanner.stop()
         if self._scan_thread and self._scan_thread.isRunning():
             self._scan_thread.quit()
