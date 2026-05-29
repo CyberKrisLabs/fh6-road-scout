@@ -4,10 +4,15 @@ import logging
 
 import cv2
 import numpy as np
+from PySide6.QtCore import QSettings
 
 from app.models.scan_result import DiscoveryState, ScanPoint
 
 log = logging.getLogger(__name__)
+
+_SETTINGS_ORG = "HorizonScout"
+_SETTINGS_APP = "HorizonScout"
+_INTERVAL_KEY = "sampler/interval"
 
 _DEFAULT_INTERVAL = 15
 _MIN_ROAD_BRIGHTNESS = 180  # HSV Value threshold (0-255)
@@ -76,6 +81,18 @@ class RoadSampler:
                 last_pt = coord
 
         return points
+
+
+def save_interval(interval: int) -> None:
+    """Persist the sample interval to QSettings."""
+    s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    s.setValue(_INTERVAL_KEY, max(5, min(50, interval)))
+
+
+def load_interval() -> int:
+    """Load the sample interval from QSettings (default 15)."""
+    s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    return int(str(s.value(_INTERVAL_KEY, _DEFAULT_INTERVAL)))
 
 
 def _morph_skeleton(img: np.ndarray) -> np.ndarray:

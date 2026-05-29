@@ -207,3 +207,49 @@ class TestSampleMethod:
         path = str(tmp_path / "black.png")
         cv2.imwrite(path, img)
         assert sampler.sample(path) == []
+
+
+# ── Configurable interval ─────────────────────────────────────────────────────
+
+
+class TestInterval:
+    def test_default_interval_is_15(self) -> None:
+        assert RoadSampler().interval == 15
+
+    def test_custom_interval_is_stored(self) -> None:
+        assert RoadSampler(interval=20).interval == 20
+
+    def test_interval_clamped_below_minimum(self) -> None:
+        assert RoadSampler(interval=1).interval == 5
+
+    def test_interval_clamped_above_maximum(self) -> None:
+        assert RoadSampler(interval=999).interval == 50
+
+    def test_interval_at_minimum_boundary(self) -> None:
+        assert RoadSampler(interval=5).interval == 5
+
+    def test_interval_at_maximum_boundary(self) -> None:
+        assert RoadSampler(interval=50).interval == 50
+
+    def test_smaller_interval_produces_more_points(self, line_skeleton: np.ndarray) -> None:
+        dense = RoadSampler(interval=5)
+        sparse = RoadSampler(interval=30)
+        assert len(dense._sample_skeleton(line_skeleton)) > len(
+            sparse._sample_skeleton(line_skeleton)
+        )
+
+
+class TestQSettingsInterval:
+    def test_save_and_load_interval(self, qtbot) -> None:
+        from app.core.road_sampler import load_interval, save_interval
+
+        save_interval(25)
+        assert load_interval() == 25
+
+    def test_load_returns_default_when_unset(self, qtbot) -> None:
+        from PySide6.QtCore import QSettings
+
+        from app.core.road_sampler import load_interval
+
+        QSettings("HorizonScout", "HorizonScout").remove("sampler/interval")
+        assert load_interval() == 15
