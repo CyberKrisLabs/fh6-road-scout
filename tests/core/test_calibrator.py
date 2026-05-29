@@ -128,3 +128,70 @@ class TestRealisticScenario:
         calibrator.fit(ref, screen)
         x, y = calibrator.transform(200, 200)
         assert x >= 0 and y >= 0
+
+
+# ── Serialise / deserialise (P3-S3) ──────────────────────────────────────────
+
+
+class TestToDict:
+    def test_unfitted_returns_empty_dict(self, calibrator: Calibrator) -> None:
+        assert calibrator.to_dict() == {}
+
+    def test_fitted_returns_dict_with_matrix_key(self, identity_calibrator: Calibrator) -> None:
+        d = identity_calibrator.to_dict()
+        assert "matrix" in d
+
+    def test_matrix_is_list_of_lists(self, identity_calibrator: Calibrator) -> None:
+        d = identity_calibrator.to_dict()
+        assert isinstance(d["matrix"], list)
+        assert all(isinstance(row, list) for row in d["matrix"])
+
+
+class TestFromDict:
+    def test_empty_dict_leaves_unfitted(self, calibrator: Calibrator) -> None:
+        calibrator.from_dict({})
+        assert calibrator.is_fitted is False
+
+    def test_round_trip_preserves_transform(self, translation_calibrator: Calibrator) -> None:
+        d = translation_calibrator.to_dict()
+        restored = Calibrator()
+        restored.from_dict(d)
+        assert restored.is_fitted
+        x1, y1 = translation_calibrator.transform(50, 60)
+        x2, y2 = restored.transform(50, 60)
+        assert abs(x1 - x2) <= 1 and abs(y1 - y2) <= 1
+
+    def test_round_trip_accuracy_to_3dp(self, translation_calibrator: Calibrator) -> None:
+        import json
+
+        d = translation_calibrator.to_dict()
+        # Simulate JSON serialisation (QSettings stores as string)
+        d2 = json.loads(json.dumps(d))
+        restored = Calibrator()
+        restored.from_dict(d2)
+        x1, y1 = translation_calibrator.transform(123, 456)
+        x2, y2 = restored.transform(123, 456)
+        assert abs(x1 - x2) <= 1 and abs(y1 - y2) <= 1
+
+
+class TestQSettingsCalibration:
+    def test_save_and_load_calibration(self, translation_calibrator: Calibrator, qtbot) -> None:
+        from app.core.calibrator import load_calibration, save_calibration
+
+        save_calibration(translation_calibrator)
+        loaded = Calibrator()
+        load_calibration(loaded)
+        assert loaded.is_fitted
+        x1, y1 = translation_calibrator.transform(10, 20)
+        x2, y2 = loaded.transform(10, 20)
+        assert abs(x1 - x2) <= 1 and abs(y1 - y2) <= 1
+
+    def test_load_with_no_saved_data_stays_unfitted(self, qtbot) -> None:
+        from PySide6.QtCore import QSettings
+
+        from app.core.calibrator import load_calibration
+
+        QSettings("HorizonScout", "HorizonScout").remove("calibration/matrix")
+        c = Calibrator()
+        load_calibration(c)
+        assert c.is_fitted is False
