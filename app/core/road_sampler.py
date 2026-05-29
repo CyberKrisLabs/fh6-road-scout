@@ -48,14 +48,10 @@ class RoadSampler:
 
     def _skeletonize(self, mask: np.ndarray) -> np.ndarray:
         """Thin the road mask to a single-pixel skeleton."""
-        try:
-            skeleton = cv2.ximgproc.thinning(  # type: ignore[attr-defined]
-                mask,
-                thinningType=cv2.ximgproc.THINNING_ZHANGSUEN,  # type: ignore[attr-defined]
-            )
-        except AttributeError:
-            skeleton = _morph_skeleton(mask)
-        return skeleton  # type: ignore[no-any-return]
+        ximgproc = getattr(cv2, "ximgproc", None)
+        if ximgproc is not None:
+            return np.asarray(ximgproc.thinning(mask, thinningType=ximgproc.THINNING_ZHANGSUEN))
+        return _morph_skeleton(mask)
 
     def _sample_skeleton(self, skeleton: np.ndarray) -> list[ScanPoint]:
         """Sample points at least `interval` pixels apart along the skeleton."""
