@@ -6,7 +6,7 @@ import time
 import mss
 import numpy as np
 import pyautogui
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QSettings, Signal
 
 from app.core.calibrator import Calibrator
 from app.core.detector import Detector
@@ -16,6 +16,11 @@ log = logging.getLogger(__name__)
 
 _DEFAULT_HOVER_DELAY = 0.12
 _BATCH_SIGNAL = 10
+_SETTINGS_ORG = "HorizonScout"
+_SETTINGS_APP = "HorizonScout"
+_DELAY_KEY = "scanner/hover_delay"
+_DELAY_MIN = 0.05
+_DELAY_MAX = 1.0
 
 
 class Scanner(QObject):
@@ -103,3 +108,13 @@ class Scanner(QObject):
         total_scanned = sum(1 for p in self._points if p.state != DiscoveryState.UNKNOWN)
         self.progress.emit(total_scanned)
         self.finished.emit()
+
+
+def save_hover_delay(delay: float) -> None:
+    s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    s.setValue(_DELAY_KEY, max(_DELAY_MIN, min(_DELAY_MAX, delay)))
+
+
+def load_hover_delay() -> float:
+    s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    return float(str(s.value(_DELAY_KEY, _DEFAULT_HOVER_DELAY)))

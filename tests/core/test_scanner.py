@@ -239,20 +239,74 @@ class TestScannerPauseResume:
         s.pause()
 
         sct_mock = _mock_mss_sct(black_screen)
+        # Do NOT mock time.sleep here — the pause loop needs real sleep to yield the GIL
         with (
             patch("app.core.scanner.mss.mss", return_value=sct_mock),
             patch("app.core.scanner.pyautogui.moveTo"),
             patch("app.core.scanner.pyautogui.FAILSAFE", True),
-            patch("app.core.scanner.time.sleep"),
         ):
             thread = QThread()
             s.moveToThread(thread)
             thread.started.connect(s.run)
             thread.start()
-            # Give it a moment to enter paused state then stop
-            qtbot.wait(100)
+            # Wait for the loop to enter paused state, then stop
+            qtbot.wait(200)
             s.stop()
             with qtbot.waitSignal(s.finished, timeout=3000):
                 pass
             thread.quit()
             thread.wait(2000)
+
+
+# ── Hover delay / QSettings (P4-S5) ──────────────────────────────────────────
+
+
+class TestHoverDelay:
+    def test_default_delay_is_0_12(self) -> None:
+        s = Scanner(points=[], calibrator=_fitted_calibrator())
+        assert abs(s._hover_delay - 0.12) < 1e-6
+
+    def test_custom_delay_is_stored(self) -> None:
+        s = Scanner(points=[], calibrator=_fitted_calibrator(), hover_delay=0.3)
+        assert abs(s._hover_delay - 0.3) < 1e-6
+
+    def test_delay_clamped_below_minimum(self) -> None:
+        s = Scanner(points=[], calibrator=_fitted_calibrator(), hover_delay=0.0)
+        assert s._hover_delay >= 0.05
+
+    def test_delay_clamped_above_maximum(self) -> None:
+        s = Scanner(points=[], calibrator=_fitted_calibrator(), hover_delay=99.0)
+        assert s._hover_delay <= 1.0
+
+    def test_delay_at_minimum_boundary(self) -> None:
+        assert (
+            Scanner(points=[], calibrator=_fitted_calibrator(), hover_delay=0.05)._hover_delay
+            == 0.05
+        )
+
+    def test_delay_at_maximum_boundary(self) -> None:
+        assert (
+            Scanner(points=[], calibrator=_fitted_calibrator(), hover_delay=1.0)._hover_delay == 1.0
+        )
+
+
+class TestHoverDelayQSettings:
+    def test_save_and_load_delay(self, qtbot) -> None:
+        from app.core.scanner import load_hover_delay, save_hover_delay
+
+        save_hover_delay(0.25)
+        assert abs(load_hover_delay() - 0.25) < 1e-6
+
+    def test_load_default_when_unset(self, qtbot) -> None:
+        from PySide6.QtCore import QSettings
+
+        from app.core.scanner import load_hover_delay
+
+        QSettings("HorizonScout", "HorizonScout").remove("scanner/hover_delay")
+        assert abs(load_hover_delay() - 0.12) < 1e-6
+
+    def test_delay_clamped_on_save(self, qtbot) -> None:
+        from app.core.scanner import load_hover_delay, save_hover_delay
+
+        save_hover_delay(99.0)
+        assert load_hover_delay() <= 1.0
