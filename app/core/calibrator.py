@@ -1,12 +1,18 @@
 """Affine calibrator: maps reference-map pixels to game screen coordinates."""
 
+import json
 import logging
+from typing import Any
 
 import cv2
 import numpy as np
-from PySide6.QtCore import QPointF
+from PySide6.QtCore import QPointF, QSettings
 
 log = logging.getLogger(__name__)
+
+_SETTINGS_ORG = "HorizonScout"
+_SETTINGS_APP = "HorizonScout"
+_MATRIX_KEY = "calibration/matrix"
 
 
 class Calibrator:
@@ -32,3 +38,25 @@ class Calibrator:
         result = cv2.transform(pt, self._matrix)
         x, y = result[0][0]
         return round(float(x)), round(float(y))
+
+    def to_dict(self) -> dict[str, Any]:
+        if self._matrix is None:
+            return {}
+        return {"matrix": self._matrix.tolist()}
+
+    def from_dict(self, data: dict[str, Any]) -> None:
+        m = data.get("matrix")
+        if m:
+            self._matrix = np.array(m, dtype=np.float64)
+
+
+def save_calibration(calibrator: "Calibrator") -> None:
+    s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    s.setValue(_MATRIX_KEY, json.dumps(calibrator.to_dict()))
+
+
+def load_calibration(calibrator: "Calibrator") -> None:
+    s = QSettings(_SETTINGS_ORG, _SETTINGS_APP)
+    raw = s.value(_MATRIX_KEY)
+    if raw:
+        calibrator.from_dict(json.loads(str(raw)))
