@@ -1,7 +1,6 @@
 """Extract road centerline sample points from a reference map image."""
 
 import logging
-from typing import cast
 
 import cv2
 import numpy as np
@@ -50,11 +49,10 @@ class RoadSampler:
     def _skeletonize(self, mask: np.ndarray) -> np.ndarray:
         """Thin the road mask to a single-pixel skeleton."""
         ximgproc = getattr(cv2, "ximgproc", None)
+        thinned: np.ndarray
         if ximgproc is not None:
-            return cast(
-                np.ndarray,
-                ximgproc.thinning(mask, thinningType=ximgproc.THINNING_ZHANGSUEN),
-            )
+            thinned = ximgproc.thinning(mask, thinningType=ximgproc.THINNING_ZHANGSUEN)
+            return thinned
         return _morph_skeleton(mask)
 
     def _sample_skeleton(self, skeleton: np.ndarray) -> list[ScanPoint]:
