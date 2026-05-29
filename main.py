@@ -2,9 +2,22 @@
 
 import sys
 
+from PySide6.QtWidgets import QApplication
+
+from app.ui.main_window import MainWindow
+from app.ui.theme import STYLESHEET
 from app.utils.logging_setup import setup_logging
 
-setup_logging()
+
+def main() -> None:
+    setup_logging()
+    app = QApplication(sys.argv)
+    app.setApplicationName("Horizon Scout")
+    app.setStyleSheet(STYLESHEET)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+
 
 if __name__ == "__main__":
-    sys.exit(0)
+    main()
