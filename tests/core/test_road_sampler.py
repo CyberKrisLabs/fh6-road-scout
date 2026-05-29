@@ -1,5 +1,6 @@
 """Tests for RoadSampler: road_mask, skeletonize, sample."""
 
+import itertools
 from unittest.mock import patch
 
 import numpy as np
@@ -143,3 +144,66 @@ class TestSkeletonize:
         result = _morph_skeleton(thick_road_mask)
         assert result.shape == thick_road_mask.shape
         assert result.dtype == np.uint8
+
+
+# ── _sample_skeleton & sample() ───────────────────────────────────────────────
+
+
+@pytest.fixture
+def line_skeleton() -> np.ndarray:
+    """Single-pixel horizontal line skeleton at y=50, x=0..99."""
+    skel = np.zeros((100, 100), dtype=np.uint8)
+    skel[50, :] = 255
+    return skel
+
+
+class TestSampleSkeleton:
+    def test_empty_skeleton_returns_empty_list(self, sampler: RoadSampler) -> None:
+        empty = np.zeros((100, 100), dtype=np.uint8)
+        assert sampler._sample_skeleton(empty) == []
+
+    def test_returns_scan_points(self, sampler: RoadSampler, line_skeleton: np.ndarray) -> None:
+        from app.models.scan_result import ScanPoint
+
+        pts = sampler._sample_skeleton(line_skeleton)
+        assert len(pts) > 0
+        assert all(isinstance(p, ScanPoint) for p in pts)
+
+    def test_points_are_at_least_interval_apart(
+        self, sampler: RoadSampler, line_skeleton: np.ndarray
+    ) -> None:
+        pts = sampler._sample_skeleton(line_skeleton)
+        for a, b in itertools.pairwise(pts):
+            dist = ((a.ref_x - b.ref_x) ** 2 + (a.ref_y - b.ref_y) ** 2) ** 0.5
+            assert dist >= sampler.interval - 0.5  # small float tolerance
+
+    def test_all_points_state_is_unknown(
+        self, sampler: RoadSampler, line_skeleton: np.ndarray
+    ) -> None:
+        from app.models.scan_result import DiscoveryState
+
+        pts = sampler._sample_skeleton(line_skeleton)
+        assert all(p.state == DiscoveryState.UNKNOWN for p in pts)
+
+
+class TestSampleMethod:
+    def test_invalid_path_returns_empty_list(self, sampler: RoadSampler) -> None:
+        assert sampler.sample("nonexistent_image.png") == []
+
+    def test_valid_road_image_returns_points(self, sampler: RoadSampler, tmp_path) -> None:
+        import cv2
+
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        img[48:52, 5:95] = 255
+        path = str(tmp_path / "road.png")
+        cv2.imwrite(path, img)
+        pts = sampler.sample(path)
+        assert len(pts) > 0
+
+    def test_black_image_returns_empty_list(self, sampler: RoadSampler, tmp_path) -> None:
+        import cv2
+
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        path = str(tmp_path / "black.png")
+        cv2.imwrite(path, img)
+        assert sampler.sample(path) == []
