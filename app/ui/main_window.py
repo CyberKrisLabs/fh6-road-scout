@@ -14,9 +14,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.calibrator import Calibrator
+from app.core.calibrator import Calibrator, load_calibration, save_calibration
 from app.core.road_sampler import RoadSampler
 from app.core.scanner import Scanner
+from app.core.session_store import SessionStore
 from app.models.scan_result import DiscoveryState, ScanPoint, ScanSession
 from app.ui.map_view import MapView
 from app.ui.scan_panel import ScanPanel
@@ -168,13 +169,50 @@ class MainWindow(QMainWindow):
         self._map_view.jump_to_point(gaps[self._next_gap_index])
 
     def _on_export(self) -> None:
-        pass  # implemented in P5
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export Highlighted Map", "result.png", "PNG (*.png)"
+        )
+        if not path:
+            return
+        from app.core.exporter import export_overlay
+
+        try:
+            export_overlay(self._ref_map_path, self._session.points, path)
+            self._panel.set_status(f"Exported to {os.path.basename(path)}")
+        except FileNotFoundError:
+            QMessageBox.critical(self, "Export Error", "Reference map not loaded.")
 
     def _on_save(self) -> None:
-        pass  # implemented in P5
+        path, _ = QFileDialog.getSaveFileName(self, "Save Session", "session.json", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            self._session.calibration_data = self._calibrator.to_dict()
+            SessionStore.save(self._session, path)
+            save_calibration(self._calibrator)
+            self._panel.set_status(f"Session saved to {os.path.basename(path)}")
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", str(e))
 
     def _on_load_session(self) -> None:
-        pass  # implemented in P5
+        path, _ = QFileDialog.getOpenFileName(self, "Load Session", "", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            self._session = SessionStore.load(path)
+            load_calibration(self._calibrator)
+            if self._session.reference_map_path and os.path.exists(
+                self._session.reference_map_path
+            ):
+                self._map_view.load_image(self._session.reference_map_path)
+                self._ref_map_path = self._session.reference_map_path
+            self._map_view.set_points(self._session.points)
+            self._panel.set_map_loaded(True)
+            s = self._session
+            self._panel.update_progress(s.scanned, s.total, s.discovered, s.undiscovered)
+            self._panel.set_status("Session loaded.")
+        except (FileNotFoundError, ValueError) as e:
+            QMessageBox.critical(self, "Load Error", str(e))
 
     # ------------------------------------------------------------------
 
