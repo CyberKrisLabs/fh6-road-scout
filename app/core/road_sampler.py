@@ -37,14 +37,14 @@ class RoadSampler:
 
     def _road_mask(self, bgr: np.ndarray) -> np.ndarray:
         """Binary mask: 255 where bright low-saturation (road-like) pixels are."""
-        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        hsv: np.ndarray = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
         lower = np.array([0, 0, _MIN_ROAD_BRIGHTNESS])
         upper = np.array([180, _MAX_ROAD_SATURATION, 255])
-        mask = cv2.inRange(hsv, lower, upper)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
-        return mask
+        mask: np.ndarray = cv2.inRange(hsv, lower, upper)
+        kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        opened: np.ndarray = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+        closed: np.ndarray = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel, iterations=2)
+        return closed
 
     def _skeletonize(self, mask: np.ndarray) -> np.ndarray:
         """Thin the road mask to a single-pixel skeleton."""
@@ -96,13 +96,14 @@ def load_interval() -> int:
 def _morph_skeleton(img: np.ndarray) -> np.ndarray:
     """Pure-OpenCV iterative morphological thinning (no ximgproc required)."""
     img = img.copy()
-    skel = np.zeros_like(img)
-    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
+    skel: np.ndarray = np.zeros_like(img)
+    kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))
     for _ in range(100):
-        eroded = cv2.erode(img, kernel)
-        opened = cv2.dilate(eroded, kernel)
-        diff = cv2.subtract(img, opened)
-        skel = cv2.bitwise_or(skel, diff)
+        eroded: np.ndarray = cv2.erode(img, kernel)
+        opened: np.ndarray = cv2.dilate(eroded, kernel)
+        diff: np.ndarray = cv2.subtract(img, opened)
+        merged: np.ndarray = cv2.bitwise_or(skel, diff)
+        skel = merged
         img = eroded.copy()
         if cv2.countNonZero(img) == 0:
             break
