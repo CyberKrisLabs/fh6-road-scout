@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 from app.core.calibrator import Calibrator
 from app.core.road_sampler import RoadSampler
 from app.core.scanner import Scanner
-from app.models.scan_result import ScanPoint, ScanSession
+from app.models.scan_result import DiscoveryState, ScanPoint, ScanSession
 from app.ui.map_view import MapView
 from app.ui.scan_panel import ScanPanel
 from app.utils.paths import asset
@@ -36,6 +36,7 @@ class MainWindow(QMainWindow):
         self._scanner: Scanner | None = None
         self._scan_thread: QThread | None = None
         self._ref_map_path: str = ""
+        self._next_gap_index: int = -1
 
         self._build_ui()
 
@@ -160,7 +161,11 @@ class MainWindow(QMainWindow):
         log.info("Scan finished")
 
     def _on_jump_next(self) -> None:
-        pass  # implemented in P5
+        gaps = [p for p in self._session.points if p.state == DiscoveryState.UNDISCOVERED]
+        if not gaps:
+            return
+        self._next_gap_index = (self._next_gap_index + 1) % len(gaps)
+        self._map_view.jump_to_point(gaps[self._next_gap_index])
 
     def _on_export(self) -> None:
         pass  # implemented in P5
