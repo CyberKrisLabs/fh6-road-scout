@@ -171,3 +171,88 @@ class TestScannerStop:
             thread.wait(2000)
 
         assert len(emitted) < 20
+
+
+# ── Pause / resume / stop (P4-S4) ────────────────────────────────────────────
+
+
+class TestScannerPauseResume:
+    def _run_with_patches(
+        self,
+        scanner: Scanner,
+        black_screen: np.ndarray,
+        qtbot: QtBot,
+    ) -> None:
+        sct_mock = _mock_mss_sct(black_screen)
+        with (
+            patch("app.core.scanner.mss.mss", return_value=sct_mock),
+            patch("app.core.scanner.pyautogui.moveTo"),
+            patch("app.core.scanner.pyautogui.FAILSAFE", True),
+            patch("app.core.scanner.time.sleep"),
+        ):
+            thread = QThread()
+            scanner.moveToThread(thread)
+            thread.started.connect(scanner.run)
+            with qtbot.waitSignal(scanner.finished, timeout=5000):
+                thread.start()
+            thread.quit()
+            thread.wait(2000)
+
+    def test_pause_then_stop_emits_finished(
+        self, scanner_factory, black_screen: np.ndarray, qtbot: QtBot
+    ) -> None:
+        pts = _make_points(5)
+        s = scanner_factory(pts)
+
+        def _pause_then_stop(_pt: ScanPoint) -> None:
+            s.pause()
+            s.stop()
+
+        s.point_scanned.connect(_pause_then_stop)
+        self._run_with_patches(s, black_screen, qtbot)
+
+    def test_paused_points_retain_unknown_state(
+        self, scanner_factory, black_screen: np.ndarray, qtbot: QtBot
+    ) -> None:
+        pts = _make_points(5)
+        s = scanner_factory(pts)
+        emitted: list[ScanPoint] = []
+        s.point_scanned.connect(emitted.append)
+
+        def _pause_and_stop(_pt: ScanPoint) -> None:
+            s.pause()
+            s.stop()
+
+        s.point_scanned.connect(_pause_and_stop)
+        self._run_with_patches(s, black_screen, qtbot)
+
+        # Points not yet scanned when stopped must stay UNKNOWN
+        scanned_count = len(emitted)
+        for pt in pts[scanned_count:]:
+            assert pt.state == DiscoveryState.UNKNOWN
+
+    def test_stop_from_paused_state_emits_finished(
+        self, scanner_factory, black_screen: np.ndarray, qtbot: QtBot
+    ) -> None:
+        pts = _make_points(3)
+        s = scanner_factory(pts)
+        s.pause()
+
+        sct_mock = _mock_mss_sct(black_screen)
+        with (
+            patch("app.core.scanner.mss.mss", return_value=sct_mock),
+            patch("app.core.scanner.pyautogui.moveTo"),
+            patch("app.core.scanner.pyautogui.FAILSAFE", True),
+            patch("app.core.scanner.time.sleep"),
+        ):
+            thread = QThread()
+            s.moveToThread(thread)
+            thread.started.connect(s.run)
+            thread.start()
+            # Give it a moment to enter paused state then stop
+            qtbot.wait(100)
+            s.stop()
+            with qtbot.waitSignal(s.finished, timeout=3000):
+                pass
+            thread.quit()
+            thread.wait(2000)
