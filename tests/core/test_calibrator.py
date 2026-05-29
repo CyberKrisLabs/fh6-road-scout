@@ -90,3 +90,41 @@ class TestScalingTransform:
         calibrator.fit(ref, screen)
         x, y = calibrator.transform(50, 50)
         assert abs(x - 100) <= 1 and abs(y - 100) <= 1
+
+
+# ── Transform accuracy & rounding (P3-S2) ────────────────────────────────────
+
+
+class TestTransformOutputTypes:
+    def test_returns_tuple_of_ints(self, identity_calibrator: Calibrator) -> None:
+        result = identity_calibrator.transform(10, 20)
+        assert isinstance(result, tuple)
+        assert isinstance(result[0], int)
+        assert isinstance(result[1], int)
+
+    def test_rounding_is_nearest_not_truncate(self, calibrator: Calibrator) -> None:
+        # Build a calibrator whose transform adds 0.6 to x → should round to 1
+        ref = _pts([(0.0, 0.0), (10.0, 0.0), (0.0, 10.0)])
+        screen = _pts([(0.6, 0.0), (10.6, 0.0), (0.6, 10.0)])
+        calibrator.fit(ref, screen)
+        x, _ = calibrator.transform(0, 0)
+        assert x == 1  # round(0.6) = 1, not int(0.6) = 0
+
+
+class TestRealisticScenario:
+    def test_large_map_to_1080p_screen(self, calibrator: Calibrator) -> None:
+        """4096x4096 reference map → 1920x1080 screen with 3-point calibration."""
+        ref = _pts([(0.0, 0.0), (4096.0, 0.0), (0.0, 4096.0)])
+        # Screen occupies roughly top-left 1920x1080 region
+        screen = _pts([(0.0, 0.0), (1920.0, 0.0), (0.0, 1080.0)])
+        calibrator.fit(ref, screen)
+        # Centre of map should land near centre of screen
+        x, y = calibrator.transform(2048, 2048)
+        assert 900 <= x <= 1000 and 500 <= y <= 600
+
+    def test_no_negative_coords_for_sensible_calibration(self, calibrator: Calibrator) -> None:
+        ref = _pts([(100.0, 100.0), (300.0, 100.0), (100.0, 300.0)])
+        screen = _pts([(200.0, 150.0), (600.0, 150.0), (200.0, 550.0)])
+        calibrator.fit(ref, screen)
+        x, y = calibrator.transform(200, 200)
+        assert x >= 0 and y >= 0
