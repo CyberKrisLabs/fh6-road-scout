@@ -38,3 +38,10 @@ Thumbs.db
 
 # App data
 *.log
+
+# Local tooling scripts (not part of the app)
+tools/
+
+# Downloaded map tiles and intermediate assets
+assets/maps/final/
+assets/maps/strips/

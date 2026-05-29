@@ -21,6 +21,7 @@ log = logging.getLogger(__name__)
 class ScanPanel(QWidget):
     """Left-side control panel."""
 
+    season_selected = Signal(str)
     load_map_requested = Signal()
     calibrate_requested = Signal()
     scan_start_requested = Signal()
@@ -50,6 +51,29 @@ class ScanPanel(QWidget):
         sub.setProperty("class", "app-subtitle")
         sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(sub)
+
+        root.addWidget(_hr())
+
+        root.addWidget(_section_label("SEASON"))
+        season_row1 = QHBoxLayout()
+        season_row1.setSpacing(4)
+        self.btn_spring = _btn("Spring")
+        self.btn_summer = _btn("Summer")
+        self.btn_spring.clicked.connect(lambda: self.season_selected.emit("spring"))
+        self.btn_summer.clicked.connect(lambda: self.season_selected.emit("summer"))
+        season_row1.addWidget(self.btn_spring)
+        season_row1.addWidget(self.btn_summer)
+        root.addLayout(season_row1)
+
+        season_row2 = QHBoxLayout()
+        season_row2.setSpacing(4)
+        self.btn_autumn = _btn("Autumn")
+        self.btn_winter = _btn("Winter")
+        self.btn_autumn.clicked.connect(lambda: self.season_selected.emit("autumn"))
+        self.btn_winter.clicked.connect(lambda: self.season_selected.emit("winter"))
+        season_row2.addWidget(self.btn_autumn)
+        season_row2.addWidget(self.btn_winter)
+        root.addLayout(season_row2)
 
         root.addWidget(_hr())
 

@@ -3,6 +3,7 @@
 import logging
 import os
 
+from PySide6.QtCore import QSettings as _QSettings
 from PySide6.QtCore import Qt, QThread
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
@@ -23,6 +24,20 @@ from app.ui.map_view import MapView
 from app.ui.scan_panel import ScanPanel
 from app.utils.paths import asset
 
+_SETTINGS_ORG = "HorizonScout"
+_SETTINGS_APP = "HorizonScout"
+_SEASON_KEY = "map/selected_season"
+_DEFAULT_SEASON = "spring"
+
+
+def save_selected_season(season: str) -> None:
+    _QSettings(_SETTINGS_ORG, _SETTINGS_APP).setValue(_SEASON_KEY, season)
+
+
+def load_selected_season() -> str:
+    return str(_QSettings(_SETTINGS_ORG, _SETTINGS_APP).value(_SEASON_KEY, _DEFAULT_SEASON))
+
+
 log = logging.getLogger(__name__)
 
 
@@ -40,6 +55,7 @@ class MainWindow(QMainWindow):
         self._next_gap_index: int = -1
 
         self._build_ui()
+        self._autoload_season()
 
     # ------------------------------------------------------------------
     # UI construction
@@ -63,6 +79,7 @@ class MainWindow(QMainWindow):
         splitter.setSizes([210, 1070])
         layout.addWidget(splitter)
 
+        self._panel.season_selected.connect(self._on_season_selected)
         self._panel.load_map_requested.connect(self._on_load_map)
         self._panel.calibrate_requested.connect(self._on_calibrate)
         self._panel.scan_start_requested.connect(self._on_scan_start)
@@ -103,6 +120,27 @@ class MainWindow(QMainWindow):
         )
         if path:
             self._load_map(path)
+
+    def _season_map_path(self, season: str) -> str:
+        """Return the filesystem path for a season map asset."""
+        p = asset(f"maps/{season}.jpg")
+        return str(p) if p.exists() else ""
+
+    def _on_season_selected(self, season: str) -> None:
+        path = self._season_map_path(season)
+        if not path:
+            self._panel.set_status(f"Map not found for {season}.")
+            return
+        save_selected_season(season)
+        self._load_map(path)
+        log.info("Season selected: %s", season)
+
+    def _autoload_season(self) -> None:
+        season = load_selected_season()
+        path = self._season_map_path(season)
+        if path:
+            self._load_map(path)
+            log.info("Auto-loaded season: %s", season)
 
     def _on_calibrate(self) -> None:
         pass  # implemented in P3
