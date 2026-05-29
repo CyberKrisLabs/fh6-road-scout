@@ -101,3 +101,89 @@ class TestTemplateMatch:
         self, detector_with_template: Detector, roi_with_template: np.ndarray
     ) -> None:
         assert isinstance(detector_with_template._template_match(roi_with_template), float)
+
+
+# ── Color heuristic fixtures ──────────────────────────────────────────────────
+
+
+@pytest.fixture
+def teal_roi() -> np.ndarray:
+    """ROI with a block of teal pixels (hue ~92, high sat/val in HSV)."""
+    import cv2
+
+    roi = np.zeros((90, 220, 3), dtype=np.uint8)
+    # BGR teal: (180, 200, 30) → HSV ~(92, 230, 200) — inside hue 82-105 range
+    roi[20:60, 50:170] = (180, 200, 30)
+    return cv2.cvtColor(cv2.cvtColor(roi, cv2.COLOR_BGR2HSV), cv2.COLOR_HSV2BGR)
+
+
+@pytest.fixture
+def no_teal_roi() -> np.ndarray:
+    """ROI with only red pixels — no teal."""
+    roi = np.zeros((90, 220, 3), dtype=np.uint8)
+    roi[:, :] = (0, 0, 200)  # pure red
+    return roi
+
+
+# ── _color_heuristic ──────────────────────────────────────────────────────────
+
+
+class TestColorHeuristic:
+    def test_teal_roi_returns_score_above_threshold(self, teal_roi: np.ndarray) -> None:
+        score = Detector()._color_heuristic(teal_roi)
+        assert score > 0.02
+
+    def test_no_teal_roi_returns_score_at_or_below_threshold(self, no_teal_roi: np.ndarray) -> None:
+        score = Detector()._color_heuristic(no_teal_roi)
+        assert score <= 0.02
+
+    def test_returns_float(self, teal_roi: np.ndarray) -> None:
+        assert isinstance(Detector()._color_heuristic(teal_roi), float)
+
+    def test_empty_teal_roi_returns_zero(self) -> None:
+        blank = np.zeros((90, 220, 3), dtype=np.uint8)
+        assert Detector()._color_heuristic(blank) == 0.0
+
+
+# ── is_fast_travel_visible ────────────────────────────────────────────────────
+
+
+class TestIsFastTravelVisible:
+    def _full_screen(self, roi: np.ndarray) -> np.ndarray:
+        """Embed the ROI in a 1920x1080 screenshot at a known position."""
+        screen = np.zeros((1080, 1920, 3), dtype=np.uint8)
+        screen[0 : roi.shape[0], 0 : roi.shape[1]] = roi
+        return screen
+
+    def test_returns_true_when_template_matches(
+        self,
+        detector_with_template: Detector,
+        roi_with_template: np.ndarray,
+    ) -> None:
+        screen = self._full_screen(roi_with_template)
+        # Position cursor so the ROI region is captured
+        detected, conf = detector_with_template.is_fast_travel_visible(screen, 110, 145)
+        assert detected is True
+        assert conf > 0.0
+
+    def test_returns_true_when_teal_present(self, teal_roi: np.ndarray) -> None:
+        screen = self._full_screen(teal_roi)
+        detected, _conf = Detector().is_fast_travel_visible(screen, 110, 145)
+        assert detected is True
+
+    def test_returns_false_when_neither_passes(self, roi_without_template: np.ndarray) -> None:
+        screen = self._full_screen(roi_without_template)
+        detected, _ = Detector().is_fast_travel_visible(screen, 110, 145)
+        assert detected is False
+
+    def test_returns_tuple_of_bool_and_float(self, roi_without_template: np.ndarray) -> None:
+        screen = self._full_screen(roi_without_template)
+        result = Detector().is_fast_travel_visible(screen, 110, 145)
+        assert isinstance(result[0], bool)
+        assert isinstance(result[1], float)
+
+    def test_roi_outside_screen_returns_false(self) -> None:
+        tiny_screen = np.zeros((10, 10, 3), dtype=np.uint8)
+        detected, conf = Detector().is_fast_travel_visible(tiny_screen, 5, 5)
+        assert detected is False
+        assert conf == 0.0
