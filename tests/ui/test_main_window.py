@@ -1,6 +1,7 @@
 """Integration tests for MainWindow: wiring, load-map flow, window properties."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from pytestqt.qtbot import QtBot
@@ -34,10 +35,12 @@ class TestWindowProperties:
 
 class TestLoadMap:
     def test_loading_invalid_path_does_not_crash(self, window: MainWindow) -> None:
-        window._load_map(MISSING_PATH)  # must not raise
+        with patch("app.ui.main_window.QMessageBox.critical"):
+            window._load_map(MISSING_PATH)  # must not raise
 
     def test_loading_invalid_path_leaves_start_disabled(self, window: MainWindow) -> None:
-        window._load_map(MISSING_PATH)
+        with patch("app.ui.main_window.QMessageBox.critical"):
+            window._load_map(MISSING_PATH)
         assert not window._panel.btn_start.isEnabled()
 
     def test_loading_valid_image_enables_start(self, window: MainWindow) -> None:
