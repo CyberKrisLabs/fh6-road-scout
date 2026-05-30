@@ -8,27 +8,33 @@ from PySide6.QtGui import (
     QColor,
     QMouseEvent,
     QPainter,
+    QPainterPath,
     QPen,
     QPixmap,
     QWheelEvent,
 )
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from app.models.scan_result import DiscoveryState, ScanPoint
+from app.models.scan_result import DiscoveryState, RoadType, ScanPoint
 
 log = logging.getLogger(__name__)
 
 _DOT_R = 4
-_UNKNOWN_COLOR = QColor(180, 180, 180, 120)
+
+# Colors when a point has been scanned
 _DISCOVERED_COLOR = QColor(80, 220, 100, 200)
 _UNDISCOVERED_COLOR = QColor(255, 80, 50, 220)
-_CALIB_COLOR = QColor(255, 200, 0, 255)
 
-_COLOR_MAP = {
-    DiscoveryState.UNKNOWN: _UNKNOWN_COLOR,
-    DiscoveryState.DISCOVERED: _DISCOVERED_COLOR,
-    DiscoveryState.UNDISCOVERED: _UNDISCOVERED_COLOR,
+# Colors when a point is still UNKNOWN — show by road type (matches in-game overlay)
+_ROAD_TYPE_COLOR: dict[RoadType, QColor] = {
+    RoadType.ASPHALT:  QColor(240, 240, 255, 170),  # white
+    RoadType.TUNNEL:   QColor(180, 185, 200, 140),  # grey-white (subtle dots in-game)
+    RoadType.DIRT:     QColor(255, 150,  30, 190),  # orange solid
+    RoadType.OFFROAD:  QColor(255, 175,  70, 160),  # orange dashed (lighter)
+    RoadType.ALLEYWAY: QColor( 80, 220, 220, 170),  # cyan dashed
 }
+
+_CALIB_COLOR = QColor(255, 200, 0, 255)
 
 
 class MapView(QWidget):
@@ -42,6 +48,8 @@ class MapView(QWidget):
         self.setMouseTracking(True)
 
         self._pixmap: QPixmap | None = None
+        self._display_pixmap: QPixmap | None = None  # reduced-res for fast rendering
+        self._display_scale: float = 1.0  # full_px * _display_scale = display_px
         self._points: list[ScanPoint] = []
         self._calib_points: list[QPointF] = []
         self._calib_mode: bool = False
@@ -58,14 +66,29 @@ class MapView(QWidget):
     # Public API
     # ------------------------------------------------------------------
 
+    _MAX_DISPLAY_PX = 1920  # max dimension of the display pixmap
+
     def load_image(self, path: str) -> bool:
         img = QPixmap(path)
         if img.isNull():
             return False
         self._pixmap = img
+        # Build a reduced-res display pixmap so paintEvent scales fewer pixels
+        max_dim = max(img.width(), img.height())
+        if max_dim > self._MAX_DISPLAY_PX:
+            self._display_scale = self._MAX_DISPLAY_PX / max_dim
+            self._display_pixmap = img.scaled(
+                int(img.width() * self._display_scale),
+                int(img.height() * self._display_scale),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        else:
+            self._display_pixmap = img
+            self._display_scale = 1.0
         self._fit_to_view()
         self.update()
-        log.debug("Loaded map image: %s", path)
+        log.debug("Loaded map image: %s (display scale %.2f)", path, self._display_scale)
         return True
 
     def set_points(self, points: list[ScanPoint]) -> None:
@@ -175,19 +198,62 @@ class MapView(QWidget):
             )
             return
 
-        painter.save()
-        painter.translate(self._offset)
-        painter.scale(self._scale, self._scale)
-        painter.drawPixmap(0, 0, self._pixmap)
-        painter.restore()
+        # Render only the visible slice using the reduced-res display pixmap
+        disp = self._display_pixmap
+        ds = self._display_scale
+        visible_img = QRectF(
+            -self._offset.x() / self._scale,
+            -self._offset.y() / self._scale,
+            self.width() / self._scale,
+            self.height() / self._scale,
+        )
+        img_bounds = QRectF(0.0, 0.0, float(self._pixmap.width()), float(self._pixmap.height()))
+        src_full = visible_img.intersected(img_bounds)
+        if not src_full.isEmpty() and disp is not None:
+            tgt = QRectF(
+                src_full.x() * self._scale + self._offset.x(),
+                src_full.y() * self._scale + self._offset.y(),
+                src_full.width() * self._scale,
+                src_full.height() * self._scale,
+            )
+            src_disp = QRectF(
+                src_full.x() * ds,
+                src_full.y() * ds,
+                src_full.width() * ds,
+                src_full.height() * ds,
+            )
+            painter.drawPixmap(tgt, disp, src_disp)
 
+        # Batch scan-point dots by colour to minimise painter state changes.
+        # Cull in image space first (cheap) before converting to widget coords.
+        r = float(max(2, int(_DOT_R * min(self._scale, 2.0))))
+        visible_img_l = -self._offset.x() / self._scale
+        visible_img_t = -self._offset.y() / self._scale
+        visible_img_r = visible_img_l + self.width() / self._scale
+        visible_img_b = visible_img_t + self.height() / self._scale
+        # Group dots by colour; QColor isn't hashable so key by rgba() int.
+        color_paths: dict[int, tuple[QColor, QPainterPath]] = {}
         for pt in self._points:
-            color = _COLOR_MAP[pt.state]
+            if not (visible_img_l <= pt.ref_x <= visible_img_r and
+                    visible_img_t <= pt.ref_y <= visible_img_b):
+                continue
+            if pt.state == DiscoveryState.DISCOVERED:
+                color = _DISCOVERED_COLOR
+            elif pt.state == DiscoveryState.UNDISCOVERED:
+                color = _UNDISCOVERED_COLOR
+            else:
+                color = _ROAD_TYPE_COLOR[pt.road_type]
             w_pt = self._img_to_widget(QPointF(pt.ref_x, pt.ref_y))
-            r = max(2, int(_DOT_R * min(self._scale, 2.0)))
-            painter.setPen(Qt.PenStyle.NoPen)
+            key = color.rgba()
+            entry = color_paths.get(key)
+            if entry is None:
+                entry = (color, QPainterPath())
+                color_paths[key] = entry
+            entry[1].addEllipse(w_pt, r, r)
+        painter.setPen(Qt.PenStyle.NoPen)
+        for color, path in color_paths.values():
             painter.setBrush(QBrush(color))
-            painter.drawEllipse(w_pt, r, r)
+            painter.drawPath(path)
 
         for i, cp in enumerate(self._calib_points):
             w_pt = self._img_to_widget(cp)

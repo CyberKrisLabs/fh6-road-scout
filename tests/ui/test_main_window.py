@@ -1,5 +1,6 @@
 """Integration tests for MainWindow: wiring, load-map flow, window properties."""
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -59,18 +60,39 @@ class TestLoadMap:
         window._load_map(str(ROAD_MAP))
         assert window._ref_map_path == str(ROAD_MAP)
 
-    def test_loading_valid_image_populates_session(self, window: MainWindow, qtbot: QtBot) -> None:
-        from app.models.scan_result import ScanPoint
-
-        fake_points = [ScanPoint(ref_x=i, ref_y=50) for i in range(5)]
-        with patch("app.ui.main_window.RoadSampler.sample", return_value=fake_points):
-            window._load_map(str(ROAD_MAP))
-            # Wait for background sampler thread to complete and update session
-            qtbot.waitUntil(lambda: window._session.total == 5, timeout=3000)
+    def test_loading_valid_image_does_not_sample_roads(self, window: MainWindow) -> None:
+        """Season maps are backgrounds only — road sampling must not run on load."""
+        window._load_map(str(ROAD_MAP))
+        assert window._session.total == 0  # no road points until road_points.json exists
 
     def test_loading_valid_image_updates_map_view(self, window: MainWindow) -> None:
         window._load_map(str(ROAD_MAP))
         assert window._map_view._pixmap is not None
+
+
+class TestRoadPointsLoading:
+    def test_road_points_loaded_from_json_when_present(
+        self, window: MainWindow, tmp_path: Path
+    ) -> None:
+        road_pts = {
+            "points": [
+                {"x": 10, "y": 20, "state": "unknown", "conf": 0.0},
+                {"x": 30, "y": 40, "state": "unknown", "conf": 0.0},
+            ]
+        }
+        road_json = tmp_path / "road_points.json"
+        road_json.write_text(json.dumps(road_pts), encoding="utf-8")
+        with patch("app.ui.main_window.asset", return_value=road_json):
+            window._try_load_road_points()
+        assert window._session.total == 2
+
+    def test_missing_road_points_file_leaves_session_empty(
+        self, window: MainWindow, tmp_path: Path
+    ) -> None:
+        nonexistent = tmp_path / "no_road_points.json"
+        with patch("app.ui.main_window.asset", return_value=nonexistent):
+            window._try_load_road_points()
+        assert window._session.total == 0
 
 
 class TestWindowClose:

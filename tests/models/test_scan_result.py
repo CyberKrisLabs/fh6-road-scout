@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.models.scan_result import DiscoveryState, ScanPoint, ScanSession
+from app.models.scan_result import DiscoveryState, RoadType, ScanPoint, ScanSession
 
 
 class TestDiscoveryState:
@@ -15,6 +15,22 @@ class TestDiscoveryState:
         assert DiscoveryState.UNKNOWN.value == "unknown"
         assert DiscoveryState.DISCOVERED.value == "discovered"
         assert DiscoveryState.UNDISCOVERED.value == "undiscovered"
+
+
+class TestRoadType:
+    def test_has_all_five_variants(self) -> None:
+        assert RoadType.ASPHALT
+        assert RoadType.DIRT
+        assert RoadType.OFFROAD
+        assert RoadType.TUNNEL
+        assert RoadType.ALLEYWAY
+
+    def test_string_values(self) -> None:
+        assert RoadType.ASPHALT.value == "asphalt"
+        assert RoadType.DIRT.value == "dirt"
+        assert RoadType.OFFROAD.value == "offroad"
+        assert RoadType.TUNNEL.value == "tunnel"
+        assert RoadType.ALLEYWAY.value == "alleyway"
 
 
 class TestScanPoint:
@@ -30,6 +46,19 @@ class TestScanPoint:
     def test_default_confidence_is_zero(self) -> None:
         pt = ScanPoint(ref_x=0, ref_y=0)
         assert pt.confidence == 0.0
+
+    def test_default_road_type_is_asphalt(self) -> None:
+        pt = ScanPoint(ref_x=0, ref_y=0)
+        assert pt.road_type == RoadType.ASPHALT
+
+    def test_road_type_can_be_set(self) -> None:
+        pt = ScanPoint(ref_x=0, ref_y=0, road_type=RoadType.DIRT)
+        assert pt.road_type == RoadType.DIRT
+
+    def test_all_road_types_can_be_stored(self) -> None:
+        for rt in RoadType:
+            pt = ScanPoint(ref_x=0, ref_y=0, road_type=rt)
+            assert pt.road_type == rt
 
     def test_state_can_be_set(self) -> None:
         pt = ScanPoint(ref_x=1, ref_y=2, state=DiscoveryState.DISCOVERED, confidence=0.9)

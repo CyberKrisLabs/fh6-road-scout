@@ -3,8 +3,7 @@
 import logging
 import os
 
-from PySide6.QtCore import QSettings as _QSettings
-from PySide6.QtCore import Qt, QThread
+from PySide6.QtCore import Qt, QThread, QTimer, QSettings as _QSettings
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -16,7 +15,6 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.calibrator import Calibrator, load_calibration, save_calibration
-from app.core.road_sampler import RoadSampler
 from app.core.scanner import Scanner
 from app.core.session_store import SessionStore
 from app.models.scan_result import DiscoveryState, ScanPoint, ScanSession
@@ -55,7 +53,8 @@ class MainWindow(QMainWindow):
         self._next_gap_index: int = -1
 
         self._build_ui()
-        self._autoload_season()
+        # Defer map loading so the window appears immediately
+        QTimer.singleShot(0, self._autoload_season)
 
     # ------------------------------------------------------------------
     # UI construction
@@ -99,16 +98,29 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", "Could not load the image.")
             return
         self._ref_map_path = path
-        self._panel.set_status(f"Sampling: {os.path.basename(path)}")
-
-        sampler = RoadSampler()
-        points = sampler.sample(path)
-        self._session = ScanSession(points=points, reference_map_path=path)
-        self._map_view.set_points(points)
         self._panel.set_map_loaded(True)
-        self._panel.update_progress(0, len(points), 0, 0)
-        self._panel.set_status(f"Ready — {len(points)} road points sampled.")
-        log.info("Loaded map: %s (%d points)", path, len(points))
+        n = self._session.total
+        self._panel.set_status(f"Map loaded.{f'  {n} road points active.' if n else ''}")
+        log.info("Loading map: %s", path)
+
+    def _try_load_road_points(self) -> None:
+        """Load pre-computed road positions from assets/road_points.json if it exists."""
+        road_pts_path = asset("road_points.json")
+        if not road_pts_path.exists():
+            log.debug("No road_points.json found — overlay empty until roads are mapped.")
+            return
+        try:
+            loaded = SessionStore.load(str(road_pts_path))
+            self._session = ScanSession(
+                points=loaded.points,
+                reference_map_path=self._ref_map_path,
+            )
+            self._map_view.set_points(loaded.points)
+            self._panel.update_progress(0, len(loaded.points), 0, 0)
+            self._panel.set_status(f"Ready — {len(loaded.points)} road points loaded.")
+            log.info("Road points loaded: %d points", len(loaded.points))
+        except (FileNotFoundError, ValueError) as e:
+            log.warning("Failed to load road_points.json: %s", e)
 
     # ------------------------------------------------------------------
     # Slot handlers
@@ -132,6 +144,7 @@ class MainWindow(QMainWindow):
             self._panel.set_status(f"Map not found for {season}.")
             return
         save_selected_season(season)
+        # Season switch only swaps the background — road points are season-independent
         self._load_map(path)
         log.info("Season selected: %s", season)
 
@@ -140,6 +153,7 @@ class MainWindow(QMainWindow):
         path = self._season_map_path(season)
         if path:
             self._load_map(path)
+            self._try_load_road_points()
             log.info("Auto-loaded season: %s", season)
 
     def _on_calibrate(self) -> None:
@@ -257,7 +271,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._scanner is not None:
             self._scanner.stop()
-        if self._scan_thread and self._scan_thread.isRunning():
+        if self._scan_thread is not None and self._scan_thread.isRunning():
             self._scan_thread.quit()
             self._scan_thread.wait(2000)
         super().closeEvent(event)
