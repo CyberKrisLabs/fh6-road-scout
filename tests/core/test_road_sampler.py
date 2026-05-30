@@ -186,6 +186,27 @@ class TestSampleSkeleton:
         assert all(p.state == DiscoveryState.UNKNOWN for p in pts)
 
 
+class TestSampleImage:
+    def test_valid_image_returns_points(self, sampler: RoadSampler) -> None:
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        img[48:52, 5:95] = 255
+        pts = sampler.sample_image(img)
+        assert len(pts) > 0
+
+    def test_black_image_returns_empty_list(self, sampler: RoadSampler) -> None:
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        assert sampler.sample_image(img) == []
+
+    def test_sample_delegates_to_sample_image(self, sampler: RoadSampler, tmp_path) -> None:
+        import cv2
+
+        img = np.zeros((100, 100, 3), dtype=np.uint8)
+        img[48:52, 5:95] = 255
+        path = str(tmp_path / "road.png")
+        cv2.imwrite(path, img)
+        assert sampler.sample(path) == sampler.sample_image(img)
+
+
 class TestSampleMethod:
     def test_invalid_path_returns_empty_list(self, sampler: RoadSampler) -> None:
         assert sampler.sample("nonexistent_image.png") == []

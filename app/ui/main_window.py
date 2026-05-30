@@ -15,6 +15,10 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.calibrator import Calibrator, load_calibration, save_calibration
+from app.core.fast_travel_detector import FastTravelDetector
+from app.core.road_cursor_detector import RoadCursorDetector
+from app.core.road_mapper import RoadMapper
+from app.core.raster_scanner import RasterScanner
 from app.core.scanner import Scanner
 from app.core.session_store import SessionStore
 from app.models.scan_result import DiscoveryState, ScanPoint, ScanSession
@@ -49,6 +53,10 @@ class MainWindow(QMainWindow):
         self._calibrator = Calibrator()
         self._scanner: Scanner | None = None
         self._scan_thread: QThread | None = None
+        self._mapper: RoadMapper | None = None
+        self._mapper_thread: QThread | None = None
+        self._mapper_paused: bool = False
+        self._mapper_points_found: int = 0
         self._ref_map_path: str = ""
         self._next_gap_index: int = -1
 
@@ -81,6 +89,10 @@ class MainWindow(QMainWindow):
         self._panel.season_selected.connect(self._on_season_selected)
         self._panel.load_map_requested.connect(self._on_load_map)
         self._panel.calibrate_requested.connect(self._on_calibrate)
+        self._panel.capture_ft_template_requested.connect(self._on_capture_ft_template)
+        self._panel.map_roads_requested.connect(self._on_map_roads_start)
+        self._panel.map_roads_pause_requested.connect(self._on_map_roads_pause)
+        self._panel.map_roads_stop_requested.connect(self._on_map_roads_stop)
         self._panel.scan_start_requested.connect(self._on_scan_start)
         self._panel.scan_pause_requested.connect(self._on_scan_pause)
         self._panel.scan_stop_requested.connect(self._on_scan_stop)
@@ -158,6 +170,78 @@ class MainWindow(QMainWindow):
 
     def _on_calibrate(self) -> None:
         pass  # implemented in P3
+
+    def _on_capture_ft_template(self) -> None:
+        from app.ui.ft_wizard import FTWizard
+
+        dlg = FTWizard(self)
+        dlg.exec()
+
+    # ------------------------------------------------------------------
+    # Road mapping
+    # ------------------------------------------------------------------
+
+    def _on_map_roads_start(self) -> None:
+        out_path = str(asset("road_points.json"))
+        screen_region = self._calibrator.map_screen_region() if self._calibrator.is_fitted else None
+        if screen_region is None:
+            QMessageBox.warning(self, "Not Calibrated",
+                                "Please calibrate before road mapping.")
+            return
+
+        scanner = RasterScanner(region=screen_region, step_px=20, dwell_ms=60)
+        detector = RoadCursorDetector()
+        self._mapper_points_found = 0
+        self._mapper_paused = False
+        self._mapper = RoadMapper(scanner, detector, out_path)
+        self._mapper_thread = QThread()
+        self._mapper.moveToThread(self._mapper_thread)
+        self._mapper.point_found.connect(self._on_map_point_found)
+        self._mapper.progress.connect(self._on_map_progress)
+        self._mapper.finished.connect(self._on_map_finished)
+        self._mapper_thread.started.connect(self._mapper.run)
+        self._panel.set_mapping_running(True)
+        self._panel.set_status("Mapping roads…")
+        log.info("Road mapping started")
+        self._mapper_thread.start()
+
+    def _on_map_roads_pause(self) -> None:
+        if self._mapper is None:
+            return
+        if self._mapper_paused:
+            self._mapper.resume()
+            self._mapper_paused = False
+            self._panel.set_mapping_running(True)
+            self._panel.set_status("Mapping roads…")
+        else:
+            self._mapper.pause()
+            self._mapper_paused = True
+            self._panel.set_mapping_running(False, paused=True)
+            self._panel.set_status("Mapping paused.")
+
+    def _on_map_roads_stop(self) -> None:
+        if self._mapper:
+            self._mapper.stop()
+
+    def _on_map_point_found(self, point: ScanPoint) -> None:
+        self._mapper_points_found += 1
+        self._map_view.set_points(self._session.points + [point])
+
+    def _on_map_progress(self, current: int, total: int) -> None:
+        self._panel.update_map_progress(current, total, self._mapper_points_found)
+
+    def _on_map_finished(self, total_points: int) -> None:
+        if self._mapper_thread:
+            self._mapper_thread.quit()
+            self._mapper_thread.wait()
+        self._mapper_thread = None
+        self._mapper = None
+        self._mapper_paused = False
+        self._panel.set_mapping_running(False)
+        self._panel.map_progress_bar.setValue(100)
+        self._panel.set_status(f"Mapping complete — {total_points} roads found.")
+        self._try_load_road_points()
+        log.info("Road mapping finished: %d points", total_points)
 
     def _on_scan_start(self) -> None:
         if not self._calibrator.is_fitted:

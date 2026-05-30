@@ -5,6 +5,8 @@ import logging
 import cv2
 import numpy as np
 
+from app.models.scan_result import RoadType
+
 log = logging.getLogger(__name__)
 
 # Hough circle detection parameters
@@ -63,6 +65,39 @@ class RoadCursorDetector:
                 return None
             return (result[0] + rx, result[1] + ry)
         return self._detect_in(screenshot)
+
+    def classify_type(self, screenshot: np.ndarray, center: tuple[int, int]) -> RoadType:
+        """
+        Classify the road type by sampling the colour inside the inner circle.
+
+        Args:
+            screenshot: BGR image containing the cursor.
+            center:     (x, y) centre of the detected road cursor.
+
+        Returns:
+            RoadType based on the dominant hue at the cursor centre.
+        """
+        cx, cy = center
+        radius = max(1, self._outer_min // 3)
+        x1 = max(0, cx - radius)
+        x2 = min(screenshot.shape[1], cx + radius)
+        y1 = max(0, cy - radius)
+        y2 = min(screenshot.shape[0], cy + radius)
+        patch = screenshot[y1:y2, x1:x2]
+        if patch.size == 0:
+            return RoadType.ASPHALT
+
+        hsv: np.ndarray = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV)
+        h_med = int(np.median(hsv[:, :, 0]))
+        s_med = int(np.median(hsv[:, :, 1]))
+
+        if s_med < 50:
+            return RoadType.ASPHALT          # white / grey → asphalt or tunnel
+        if 8 <= h_med <= 28:
+            return RoadType.DIRT             # orange → dirt or offroad
+        if 85 <= h_med <= 105:
+            return RoadType.ALLEYWAY         # cyan → alleyway
+        return RoadType.ASPHALT              # fallback
 
     # ------------------------------------------------------------------
     # Internal

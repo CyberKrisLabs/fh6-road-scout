@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from app.core.road_cursor_detector import RoadCursorDetector
+from app.models.scan_result import RoadType
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +129,38 @@ class TestSearchRegion:
 # ---------------------------------------------------------------------------
 # Real sample images
 # ---------------------------------------------------------------------------
+
+class TestClassifyType:
+    def _cursor_with_center(self, color_bgr: tuple[int, int, int]) -> np.ndarray:
+        """640×480 screenshot with cursor at (320,240) and specific centre colour."""
+        import cv2 as _cv2
+        img = np.full((480, 640, 3), color_bgr, dtype=np.uint8)
+        _cv2.circle(img, (320, 240), 28, (255, 255, 255), thickness=4)
+        _cv2.circle(img, (320, 240), 17, (255, 255, 255), thickness=-1)
+        # Paint the very centre (inside inner circle) with the road colour
+        _cv2.circle(img, (320, 240), 12, color_bgr, thickness=-1)
+        return img
+
+    def test_white_centre_classifies_as_asphalt(self) -> None:
+        det = RoadCursorDetector()
+        img = self._cursor_with_center((220, 220, 220))
+        assert det.classify_type(img, (320, 240)) == RoadType.ASPHALT
+
+    def test_orange_centre_classifies_as_dirt(self) -> None:
+        det = RoadCursorDetector()
+        img = self._cursor_with_center((30, 140, 255))  # BGR orange
+        assert det.classify_type(img, (320, 240)) == RoadType.DIRT
+
+    def test_cyan_centre_classifies_as_alleyway(self) -> None:
+        det = RoadCursorDetector()
+        img = self._cursor_with_center((200, 200, 50))  # BGR cyan
+        assert det.classify_type(img, (320, 240)) == RoadType.ALLEYWAY
+
+    def test_unknown_colour_defaults_to_asphalt(self) -> None:
+        det = RoadCursorDetector()
+        img = np.full((480, 640, 3), (40, 80, 40), dtype=np.uint8)
+        assert det.classify_type(img, (320, 240)) == RoadType.ASPHALT
+
 
 class TestRealSamples:
     """Smoke tests against the actual game cursor crops."""
