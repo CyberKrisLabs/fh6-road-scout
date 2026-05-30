@@ -3,8 +3,7 @@
 import logging
 import os
 
-from PySide6.QtCore import QSettings as _QSettings
-from PySide6.QtCore import Qt, QThread
+from PySide6.QtCore import Qt, QThread, QTimer, QSettings as _QSettings
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -16,7 +15,10 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.calibrator import Calibrator, load_calibration, save_calibration
-from app.core.road_sampler import RoadSampler
+from app.core.fast_travel_detector import FastTravelDetector
+from app.core.road_cursor_detector import RoadCursorDetector
+from app.core.road_mapper import RoadMapper
+from app.core.raster_scanner import RasterScanner
 from app.core.scanner import Scanner
 from app.core.session_store import SessionStore
 from app.models.scan_result import DiscoveryState, ScanPoint, ScanSession
@@ -51,11 +53,16 @@ class MainWindow(QMainWindow):
         self._calibrator = Calibrator()
         self._scanner: Scanner | None = None
         self._scan_thread: QThread | None = None
+        self._mapper: RoadMapper | None = None
+        self._mapper_thread: QThread | None = None
+        self._mapper_paused: bool = False
+        self._mapper_points_found: int = 0
         self._ref_map_path: str = ""
         self._next_gap_index: int = -1
 
         self._build_ui()
-        self._autoload_season()
+        # Defer map loading so the window appears immediately
+        QTimer.singleShot(0, self._autoload_season)
 
     # ------------------------------------------------------------------
     # UI construction
@@ -82,6 +89,10 @@ class MainWindow(QMainWindow):
         self._panel.season_selected.connect(self._on_season_selected)
         self._panel.load_map_requested.connect(self._on_load_map)
         self._panel.calibrate_requested.connect(self._on_calibrate)
+        self._panel.capture_ft_template_requested.connect(self._on_capture_ft_template)
+        self._panel.map_roads_requested.connect(self._on_map_roads_start)
+        self._panel.map_roads_pause_requested.connect(self._on_map_roads_pause)
+        self._panel.map_roads_stop_requested.connect(self._on_map_roads_stop)
         self._panel.scan_start_requested.connect(self._on_scan_start)
         self._panel.scan_pause_requested.connect(self._on_scan_pause)
         self._panel.scan_stop_requested.connect(self._on_scan_stop)
@@ -99,16 +110,29 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", "Could not load the image.")
             return
         self._ref_map_path = path
-        self._panel.set_status(f"Sampling: {os.path.basename(path)}")
-
-        sampler = RoadSampler()
-        points = sampler.sample(path)
-        self._session = ScanSession(points=points, reference_map_path=path)
-        self._map_view.set_points(points)
         self._panel.set_map_loaded(True)
-        self._panel.update_progress(0, len(points), 0, 0)
-        self._panel.set_status(f"Ready — {len(points)} road points sampled.")
-        log.info("Loaded map: %s (%d points)", path, len(points))
+        n = self._session.total
+        self._panel.set_status(f"Map loaded.{f'  {n} road points active.' if n else ''}")
+        log.info("Loading map: %s", path)
+
+    def _try_load_road_points(self) -> None:
+        """Load pre-computed road positions from assets/road_points.json if it exists."""
+        road_pts_path = asset("road_points.json")
+        if not road_pts_path.exists():
+            log.debug("No road_points.json found — overlay empty until roads are mapped.")
+            return
+        try:
+            loaded = SessionStore.load(str(road_pts_path))
+            self._session = ScanSession(
+                points=loaded.points,
+                reference_map_path=self._ref_map_path,
+            )
+            self._map_view.set_points(loaded.points)
+            self._panel.update_progress(0, len(loaded.points), 0, 0)
+            self._panel.set_status(f"Ready — {len(loaded.points)} road points loaded.")
+            log.info("Road points loaded: %d points", len(loaded.points))
+        except (FileNotFoundError, ValueError) as e:
+            log.warning("Failed to load road_points.json: %s", e)
 
     # ------------------------------------------------------------------
     # Slot handlers
@@ -132,6 +156,7 @@ class MainWindow(QMainWindow):
             self._panel.set_status(f"Map not found for {season}.")
             return
         save_selected_season(season)
+        # Season switch only swaps the background — road points are season-independent
         self._load_map(path)
         log.info("Season selected: %s", season)
 
@@ -140,10 +165,83 @@ class MainWindow(QMainWindow):
         path = self._season_map_path(season)
         if path:
             self._load_map(path)
+            self._try_load_road_points()
             log.info("Auto-loaded season: %s", season)
 
     def _on_calibrate(self) -> None:
         pass  # implemented in P3
+
+    def _on_capture_ft_template(self) -> None:
+        from app.ui.ft_wizard import FTWizard
+
+        dlg = FTWizard(self)
+        dlg.exec()
+
+    # ------------------------------------------------------------------
+    # Road mapping
+    # ------------------------------------------------------------------
+
+    def _on_map_roads_start(self) -> None:
+        out_path = str(asset("road_points.json"))
+        screen_region = self._calibrator.map_screen_region() if self._calibrator.is_fitted else None
+        if screen_region is None:
+            QMessageBox.warning(self, "Not Calibrated",
+                                "Please calibrate before road mapping.")
+            return
+
+        scanner = RasterScanner(region=screen_region, step_px=20, dwell_ms=60)
+        detector = RoadCursorDetector()
+        self._mapper_points_found = 0
+        self._mapper_paused = False
+        self._mapper = RoadMapper(scanner, detector, out_path)
+        self._mapper_thread = QThread()
+        self._mapper.moveToThread(self._mapper_thread)
+        self._mapper.point_found.connect(self._on_map_point_found)
+        self._mapper.progress.connect(self._on_map_progress)
+        self._mapper.finished.connect(self._on_map_finished)
+        self._mapper_thread.started.connect(self._mapper.run)
+        self._panel.set_mapping_running(True)
+        self._panel.set_status("Mapping roads…")
+        log.info("Road mapping started")
+        self._mapper_thread.start()
+
+    def _on_map_roads_pause(self) -> None:
+        if self._mapper is None:
+            return
+        if self._mapper_paused:
+            self._mapper.resume()
+            self._mapper_paused = False
+            self._panel.set_mapping_running(True)
+            self._panel.set_status("Mapping roads…")
+        else:
+            self._mapper.pause()
+            self._mapper_paused = True
+            self._panel.set_mapping_running(False, paused=True)
+            self._panel.set_status("Mapping paused.")
+
+    def _on_map_roads_stop(self) -> None:
+        if self._mapper:
+            self._mapper.stop()
+
+    def _on_map_point_found(self, point: ScanPoint) -> None:
+        self._mapper_points_found += 1
+        self._map_view.set_points(self._session.points + [point])
+
+    def _on_map_progress(self, current: int, total: int) -> None:
+        self._panel.update_map_progress(current, total, self._mapper_points_found)
+
+    def _on_map_finished(self, total_points: int) -> None:
+        if self._mapper_thread:
+            self._mapper_thread.quit()
+            self._mapper_thread.wait()
+        self._mapper_thread = None
+        self._mapper = None
+        self._mapper_paused = False
+        self._panel.set_mapping_running(False)
+        self._panel.map_progress_bar.setValue(100)
+        self._panel.set_status(f"Mapping complete — {total_points} roads found.")
+        self._try_load_road_points()
+        log.info("Road mapping finished: %d points", total_points)
 
     def _on_scan_start(self) -> None:
         if not self._calibrator.is_fitted:
@@ -257,7 +355,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._scanner is not None:
             self._scanner.stop()
-        if self._scan_thread and self._scan_thread.isRunning():
+        if self._scan_thread is not None and self._scan_thread.isRunning():
             self._scan_thread.quit()
             self._scan_thread.wait(2000)
         super().closeEvent(event)

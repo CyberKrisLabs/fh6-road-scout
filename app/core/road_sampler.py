@@ -29,6 +29,10 @@ class RoadSampler:
         if img is None:
             log.warning("Cannot read image: %s", image_path)
             return []
+        return self.sample_image(img)
+
+    def sample_image(self, img: np.ndarray) -> list[ScanPoint]:
+        """Return evenly-spaced ScanPoints from a pre-loaded BGR image."""
         mask = self._road_mask(img)
         skeleton = self._skeletonize(mask)
         return self._sample_skeleton(skeleton)

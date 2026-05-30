@@ -24,6 +24,10 @@ class ScanPanel(QWidget):
     season_selected = Signal(str)
     load_map_requested = Signal()
     calibrate_requested = Signal()
+    map_roads_requested = Signal()
+    map_roads_pause_requested = Signal()
+    map_roads_stop_requested = Signal()
+    capture_ft_template_requested = Signal()
     scan_start_requested = Signal()
     scan_pause_requested = Signal()
     scan_stop_requested = Signal()
@@ -86,6 +90,44 @@ class ScanPanel(QWidget):
         self.btn_calibrate.setEnabled(False)
         self.btn_calibrate.clicked.connect(self.calibrate_requested)
         root.addWidget(self.btn_calibrate)
+
+        self.btn_capture_ft = _btn("Capture FT Template")
+        self.btn_capture_ft.setToolTip("Capture the Fast Travel button from the in-game map")
+        self.btn_capture_ft.clicked.connect(self.capture_ft_template_requested)
+        root.addWidget(self.btn_capture_ft)
+
+        root.addWidget(_hr())
+
+        root.addWidget(_section_label("ROAD MAPPING"))
+        self.btn_map_roads = _btn("Map Roads", primary=True)
+        self.btn_map_roads.setEnabled(False)
+        self.btn_map_roads.setToolTip("Scan the in-game map to build the road database")
+        self.btn_map_roads.clicked.connect(self.map_roads_requested)
+        root.addWidget(self.btn_map_roads)
+
+        map_ctrl_row = QHBoxLayout()
+        map_ctrl_row.setSpacing(6)
+        self.btn_map_pause = _btn("Pause")
+        self.btn_map_pause.setEnabled(False)
+        self.btn_map_pause.clicked.connect(self.map_roads_pause_requested)
+        self.btn_map_stop = _btn("Stop")
+        self.btn_map_stop.setEnabled(False)
+        self.btn_map_stop.clicked.connect(self.map_roads_stop_requested)
+        map_ctrl_row.addWidget(self.btn_map_pause)
+        map_ctrl_row.addWidget(self.btn_map_stop)
+        root.addLayout(map_ctrl_row)
+
+        self.map_progress_bar = QProgressBar()
+        self.map_progress_bar.setRange(0, 100)
+        self.map_progress_bar.setValue(0)
+        self.map_progress_bar.setFormat("%p%")
+        root.addWidget(self.map_progress_bar)
+
+        self.lbl_map_status = QLabel("")
+        self.lbl_map_status.setProperty("class", "small-label")
+        self.lbl_map_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_map_status.setWordWrap(True)
+        root.addWidget(self.lbl_map_status)
 
         root.addWidget(_hr())
 
@@ -178,6 +220,18 @@ class ScanPanel(QWidget):
     def set_map_loaded(self, loaded: bool) -> None:
         self.btn_calibrate.setEnabled(loaded)
         self.btn_start.setEnabled(loaded)
+        self.btn_map_roads.setEnabled(loaded)
+
+    def set_mapping_running(self, running: bool, paused: bool = False) -> None:
+        self.btn_map_roads.setEnabled(not running and not paused)
+        self.btn_map_pause.setEnabled(running)
+        self.btn_map_stop.setEnabled(running or paused)
+        self.btn_map_pause.setText("Resume" if paused else "Pause")
+
+    def update_map_progress(self, current: int, total: int, points_found: int) -> None:
+        pct = int(current / total * 100) if total > 0 else 0
+        self.map_progress_bar.setValue(pct)
+        self.lbl_map_status.setText(f"{current}/{total} positions — {points_found} roads found")
 
     def set_scan_running(self, running: bool, paused: bool = False) -> None:
         self.btn_start.setEnabled(not running)

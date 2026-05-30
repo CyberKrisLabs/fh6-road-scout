@@ -5,13 +5,16 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from pytestqt.qtbot import QtBot
 
-from app.models.scan_result import DiscoveryState, ScanPoint
+from app.models.scan_result import DiscoveryState, RoadType, ScanPoint
 from app.ui.map_view import (
     _DISCOVERED_COLOR,
+    _ROAD_TYPE_COLOR,
     _UNDISCOVERED_COLOR,
-    _UNKNOWN_COLOR,
     MapView,
 )
+
+# UNKNOWN state renders using the road-type colour; asphalt is the default
+_UNKNOWN_COLOR = _ROAD_TYPE_COLOR[RoadType.ASPHALT]
 
 
 @pytest.fixture

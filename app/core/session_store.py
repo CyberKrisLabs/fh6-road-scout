@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from app.models.scan_result import DiscoveryState, ScanPoint, ScanSession
+from app.models.scan_result import DiscoveryState, RoadType, ScanPoint, ScanSession
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ class SessionStore:
                     "y": p.ref_y,
                     "state": p.state.value,
                     "conf": p.confidence,
+                    "road_type": p.road_type.value,
                 }
                 for p in session.points
             ],
@@ -47,6 +48,7 @@ class SessionStore:
                 ref_y=pt["y"],
                 state=DiscoveryState(pt["state"]),
                 confidence=pt.get("conf", 0.0),
+                road_type=RoadType(pt.get("road_type", "asphalt")),
             )
             for pt in data.get("points", [])
         ]

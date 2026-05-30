@@ -6,14 +6,17 @@ from pathlib import Path
 import pytest
 
 from app.core.session_store import SessionStore
-from app.models.scan_result import DiscoveryState, ScanPoint, ScanSession
+from app.models.scan_result import DiscoveryState, RoadType, ScanPoint, ScanSession
 
 
 def _make_session() -> ScanSession:
     pts = [
-        ScanPoint(ref_x=10, ref_y=20, state=DiscoveryState.DISCOVERED, confidence=0.9),
-        ScanPoint(ref_x=30, ref_y=40, state=DiscoveryState.UNDISCOVERED, confidence=0.2),
-        ScanPoint(ref_x=50, ref_y=60, state=DiscoveryState.UNKNOWN),
+        ScanPoint(ref_x=10, ref_y=20, state=DiscoveryState.DISCOVERED, confidence=0.9,
+                  road_type=RoadType.ASPHALT),
+        ScanPoint(ref_x=30, ref_y=40, state=DiscoveryState.UNDISCOVERED, confidence=0.2,
+                  road_type=RoadType.DIRT),
+        ScanPoint(ref_x=50, ref_y=60, state=DiscoveryState.UNKNOWN,
+                  road_type=RoadType.TUNNEL),
     ]
     return ScanSession(
         points=pts,
@@ -111,3 +114,20 @@ class TestSessionStoreLoad:
     def test_missing_file_raises_file_not_found(self) -> None:
         with pytest.raises(FileNotFoundError):
             SessionStore.load("nonexistent_session.json")
+
+    def test_round_trip_road_type(self, tmp_path: Path) -> None:
+        path = str(tmp_path / "session.json")
+        original = _make_session()
+        SessionStore.save(original, path)
+        loaded = SessionStore.load(path)
+        assert loaded.points[0].road_type == RoadType.ASPHALT
+        assert loaded.points[1].road_type == RoadType.DIRT
+        assert loaded.points[2].road_type == RoadType.TUNNEL
+
+    def test_road_type_defaults_to_asphalt_when_missing(self, tmp_path: Path) -> None:
+        """Old session files without road_type should default to ASPHALT."""
+        path = str(tmp_path / "legacy.json")
+        data = {"points": [{"x": 1, "y": 2, "state": "unknown", "conf": 0.0}]}
+        Path(path).write_text(json.dumps(data), encoding="utf-8")
+        loaded = SessionStore.load(path)
+        assert loaded.points[0].road_type == RoadType.ASPHALT

@@ -11,12 +11,21 @@ class DiscoveryState(Enum):
     UNDISCOVERED = "undiscovered"
 
 
+class RoadType(Enum):
+    ASPHALT  = "asphalt"   # white solid line
+    TUNNEL   = "tunnel"    # white solid line with subtle black centre dots
+    DIRT     = "dirt"      # orange solid line
+    OFFROAD  = "offroad"   # orange dashed line
+    ALLEYWAY = "alleyway"  # cyan thin dashed line
+
+
 @dataclass
 class ScanPoint:
     ref_x: int
     ref_y: int
     state: DiscoveryState = DiscoveryState.UNKNOWN
     confidence: float = 0.0
+    road_type: RoadType = RoadType.ASPHALT
 
 
 @dataclass

@@ -39,6 +39,25 @@ class Calibrator:
         x, y = result[0][0]
         return round(float(x)), round(float(y))
 
+    def map_screen_region(self) -> tuple[int, int, int, int] | None:
+        """
+        Return the approximate screen region (x, y, w, h) covered by the calibrated map.
+        Used by RoadMapper to set the raster scan bounds.
+        Returns None when not fitted.
+        """
+        if self._matrix is None:
+            return None
+        # Derive bounding box by transforming the four corners of a unit square
+        # scaled to a typical full-map extent.  The actual extents come from the
+        # calibration points so this is a reasonable approximation.
+        corners_ref = np.array([[[0, 0]], [[3840, 0]], [[3840, 4096]], [[0, 4096]]],
+                               dtype=np.float32)
+        corners_screen = cv2.transform(corners_ref, self._matrix.astype(np.float32))
+        pts = corners_screen[:, 0, :]
+        x1, y1 = int(pts[:, 0].min()), int(pts[:, 1].min())
+        x2, y2 = int(pts[:, 0].max()), int(pts[:, 1].max())
+        return (x1, y1, x2 - x1, y2 - y1)
+
     def to_dict(self) -> dict[str, Any]:
         if self._matrix is None:
             return {}
