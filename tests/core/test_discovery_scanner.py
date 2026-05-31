@@ -1,11 +1,9 @@
 """Tests for DiscoveryScanner — scan road points and mark discovered/undiscovered."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import cv2
 import numpy as np
-import pytest
-from PySide6.QtCore import QThread
 from pytestqt.qtbot import QtBot
 
 from app.core.discovery_scanner import DiscoveryScanner
@@ -102,9 +100,8 @@ class TestDiscoveryScannerStopResume:
         ft = FastTravelDetector()
         scanner = DiscoveryScanner(_make_points(10), ft, dwell_ms=0)
         scanner.stop()
-        with patch(_MOVE), patch.object(scanner, "_capture", return_value=_blank()):
-            with qtbot.waitSignal(scanner.finished, timeout=1000):
-                scanner.run()
+        with patch(_MOVE), patch.object(scanner, "_capture", return_value=_blank()), qtbot.waitSignal(scanner.finished, timeout=1000):
+            scanner.run()
 
     def test_skips_already_scanned_points(self, qtbot: QtBot) -> None:
         pts = _make_points(3)

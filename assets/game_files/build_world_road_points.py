@@ -72,7 +72,7 @@ def main() -> None:
         sys.exit(1)
     print(f"Parsing {len(owt_files)} .owt files ...")
 
-    # Dedup grid: keep one point per GRID_M × GRID_M cell
+    # Dedup grid: keep one point per GRID_M x GRID_M cell
     seen: set[tuple[int, int]] = set()
     kept: list[dict[str, float]] = []
 
@@ -128,7 +128,7 @@ def main() -> None:
         xs = [p["world_x"] for p in kept]
         zs = [p["world_z"] for p in kept]
 
-        fig, ax = plt.subplots(figsize=(14, 14), facecolor="black")
+        _fig, ax = plt.subplots(figsize=(14, 14), facecolor="black")
         ax.set_facecolor("black")
         ax.scatter(xs, zs, s=0.3, c="#ff6600", alpha=0.6, linewidths=0)
         ax.set_aspect("equal")

@@ -3,7 +3,8 @@
 import logging
 import os
 
-from PySide6.QtCore import Qt, QThread, QTimer, QSettings as _QSettings
+from PySide6.QtCore import QSettings as _QSettings
+from PySide6.QtCore import Qt, QThread, QTimer
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -15,14 +16,12 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.calibrator import Calibrator, load_calibration, save_calibration
-from app.core.fast_travel_detector import FastTravelDetector
 from app.core.scanner import Scanner
 from app.core.session_store import SessionStore
 from app.models.scan_result import DiscoveryState, ScanPoint, ScanSession
 from app.ui.map_view import MapView
 from app.ui.scan_panel import ScanPanel
 from app.utils.paths import asset
-from app.utils.windows import find_window_region
 
 _SETTINGS_ORG = "HorizonScout"
 _SETTINGS_APP = "HorizonScout"

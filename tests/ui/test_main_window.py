@@ -100,7 +100,6 @@ class TestWindowClose:
         window.close()  # must not raise
 
     def test_close_stops_scanner_if_running(self, window: MainWindow, qtbot: QtBot) -> None:
-        from unittest.mock import MagicMock
 
         mock_scanner = MagicMock()
         window._scanner = mock_scanner

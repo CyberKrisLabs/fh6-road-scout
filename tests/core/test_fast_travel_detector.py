@@ -1,6 +1,5 @@
 """Tests for FastTravelDetector — detect the Fast Travel indicator near the road cursor."""
 
-from pathlib import Path
 
 import cv2
 import numpy as np

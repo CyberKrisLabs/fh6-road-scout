@@ -5,12 +5,12 @@ FTWO record layout (56 bytes each, starting at offset 0x60):
   offset  0: float32 X  — world X coordinate
   offset  4: float32 Y  — elevation (ignored for 2-D map use)
   offset  8: float32 Z  — world Z coordinate
-  offset 12: float32×3  — tangent/direction vector
-  offset 24: float32×3  — secondary vector
-  offset 36: float32    — accumulated distance along route
-  offset 40: uint8×4    — flags
-  offset 44: uint32     — padding / secondary data
-  offset 48: float32×2  — curve data
+  offset 12: float32[3]  — tangent/direction vector
+  offset 24: float32[3]  — secondary vector
+  offset 36: float32     — accumulated distance along route
+  offset 40: uint8[4]    — flags
+  offset 44: uint32      — padding / secondary data
+  offset 48: float32[2]  — curve data
   (total: 56 bytes)
 
 The header (0x60 = 96 bytes) contains:
@@ -20,7 +20,6 @@ The header (0x60 = 96 bytes) contains:
 
 import json
 import struct
-import sys
 from pathlib import Path
 
 AI_TRACKS = Path(r"D:\SteamLibrary\steamapps\common\ForzaHorizon6\media\OpenWorld\Brio\AITracks")
@@ -98,8 +97,8 @@ def main() -> None:
     try:
         import matplotlib
         matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
         import matplotlib.collections as mc
+        import matplotlib.pyplot as plt
 
         lines: list[list[tuple[float, float]]] = []
         for pts in all_routes.values():
@@ -107,7 +106,7 @@ def main() -> None:
             if len(seg) >= 2:
                 lines.append(seg)
 
-        fig, ax = plt.subplots(figsize=(16, 16), facecolor="black")
+        _fig, ax = plt.subplots(figsize=(16, 16), facecolor="black")
         ax.set_facecolor("black")
         lc = mc.LineCollection(lines, colors="#00ccff", linewidths=0.6, alpha=0.9)
         ax.add_collection(lc)

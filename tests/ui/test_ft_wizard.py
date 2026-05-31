@@ -4,7 +4,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 from pytestqt.qtbot import QtBot
 
 from app.ui.ft_wizard import FTWizard
