@@ -18,14 +18,18 @@ MAP_HEIGHT: int = 2336  # keeps the correct world aspect ratio
 
 
 def world_to_ref(world_x: float, world_z: float) -> tuple[int, int]:
-    """Convert game-world (X, Z) to road_map.png pixel (ref_x, ref_y)."""
+    """Convert game-world (X, Z) to road_map.png pixel (ref_x, ref_y).
+
+    Z is flipped: larger Z sits at the top of the image (row 0), matching
+    the orientation confirmed by visual inspection of the owt_preview.png.
+    """
     ref_x = int((world_x - WORLD_X_MIN) / (WORLD_X_MAX - WORLD_X_MIN) * MAP_WIDTH)
-    ref_y = int((world_z - WORLD_Z_MIN) / (WORLD_Z_MAX - WORLD_Z_MIN) * MAP_HEIGHT)
+    ref_y = int((WORLD_Z_MAX - world_z) / (WORLD_Z_MAX - WORLD_Z_MIN) * MAP_HEIGHT)
     return ref_x, ref_y
 
 
 def ref_to_world(ref_x: int, ref_y: int) -> tuple[float, float]:
     """Convert road_map.png pixel (ref_x, ref_y) to game-world (X, Z)."""
     world_x = ref_x / MAP_WIDTH * (WORLD_X_MAX - WORLD_X_MIN) + WORLD_X_MIN
-    world_z = ref_y / MAP_HEIGHT * (WORLD_Z_MAX - WORLD_Z_MIN) + WORLD_Z_MIN
+    world_z = WORLD_Z_MAX - ref_y / MAP_HEIGHT * (WORLD_Z_MAX - WORLD_Z_MIN)
     return world_x, world_z
