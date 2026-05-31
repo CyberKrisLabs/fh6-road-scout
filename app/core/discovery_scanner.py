@@ -11,7 +11,6 @@ import pyautogui
 from PySide6.QtCore import QObject, Signal
 
 from app.core.fast_travel_detector import FastTravelDetector
-from app.core.road_cursor_detector import RoadCursorDetector
 from app.models.scan_result import DiscoveryState, ScanPoint
 
 log = logging.getLogger(__name__)
@@ -44,13 +43,11 @@ class DiscoveryScanner(QObject):
     def __init__(
         self,
         points: list[ScanPoint],
-        cursor_detector: RoadCursorDetector,
         ft_detector: FastTravelDetector,
         dwell_ms: int = 80,
     ) -> None:
         super().__init__()
         self._points = points
-        self._cursor_det = cursor_detector
         self._ft_det = ft_detector
         self._dwell = dwell_ms / 1000.0
         self._stop_flag = threading.Event()
