@@ -24,21 +24,22 @@ import struct
 import sys
 from pathlib import Path
 
-AI_TRACKS  = Path(r"D:\SteamLibrary\steamapps\common\ForzaHorizon6\media\OpenWorld\Brio\AITracks")
-OUT_JSON   = Path(__file__).parent.parent / "world_road_points.json"   # assets/
-OUT_PNG    = Path(__file__).parent / "world_road_points_preview.png"
+AI_TRACKS = Path(r"D:\SteamLibrary\steamapps\common\ForzaHorizon6\media\OpenWorld\Brio\AITracks")
+OUT_JSON = Path(__file__).parent.parent / "world_road_points.json"  # assets/
+OUT_PNG = Path(__file__).parent / "world_road_points_preview.png"
 
-MAGIC      = b"FTWO"
-HDR_SIZE   = 0x60
-STRIDE     = 56
-COUNT_OFF  = 0x24
+MAGIC = b"FTWO"
+HDR_SIZE = 0x60
+STRIDE = 56
+COUNT_OFF = 0x24
 
-GRID_M     = 15   # deduplicate within 15-metre grid cells
+GRID_M = 15  # deduplicate within 15-metre grid cells
 
 
 # ---------------------------------------------------------------------------
 # FTWO parser (same logic as parse_owt.py)
 # ---------------------------------------------------------------------------
+
 
 def parse_owt(path: Path) -> list[tuple[float, float, float]]:
     data = path.read_bytes()
@@ -64,6 +65,7 @@ def parse_owt(path: Path) -> list[tuple[float, float, float]]:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     owt_files = sorted(AI_TRACKS.glob("*.owt"))
@@ -116,12 +118,15 @@ def main() -> None:
 
     size_kb = OUT_JSON.stat().st_size / 1024
     print(f"Written {len(kept):,} unique points ({size_kb:.0f} KB) -> {OUT_JSON}")
-    print(f"World bounds: X {bounds['x_min']} .. {bounds['x_max']}  "
-          f"Z {bounds['z_min']} .. {bounds['z_max']}")
+    print(
+        f"World bounds: X {bounds['x_min']} .. {bounds['x_max']}  "
+        f"Z {bounds['z_min']} .. {bounds['z_max']}"
+    )
 
     # Preview PNG
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -135,7 +140,9 @@ def main() -> None:
         ax.axis("off")
         ax.set_title(
             f"FH6 World Road Points — {len(kept):,} pts  (grid {GRID_M}m)",
-            color="white", fontsize=13, pad=8,
+            color="white",
+            fontsize=13,
+            pad=8,
         )
         plt.tight_layout()
         plt.savefig(OUT_PNG, dpi=150, bbox_inches="tight", facecolor="black")

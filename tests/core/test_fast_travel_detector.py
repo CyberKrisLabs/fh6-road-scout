@@ -1,6 +1,5 @@
 """Tests for FastTravelDetector — detect the Fast Travel indicator near the road cursor."""
 
-
 import cv2
 import numpy as np
 import pytest
@@ -18,13 +17,16 @@ _SAMPLES = [
 ]
 
 
-def _embed(indicator: np.ndarray, canvas_size: tuple[int, int] = (800, 600),
-           pos: tuple[int, int] = (300, 250)) -> tuple[np.ndarray, tuple[int, int]]:
+def _embed(
+    indicator: np.ndarray,
+    canvas_size: tuple[int, int] = (800, 600),
+    pos: tuple[int, int] = (300, 250),
+) -> tuple[np.ndarray, tuple[int, int]]:
     """Embed indicator into a larger canvas and return canvas + cursor pos."""
     h, w = indicator.shape[:2]
     canvas = np.full((canvas_size[1], canvas_size[0], 3), (40, 80, 40), dtype=np.uint8)
     x, y = pos
-    canvas[y: y + h, x: x + w] = indicator
+    canvas[y : y + h, x : x + w] = indicator
     # Cursor is roughly left-centre of the indicator
     cursor = (x + w // 4, y + h // 2)
     return canvas, cursor
@@ -64,8 +66,9 @@ class TestIsVisible:
         indicator = cv2.imread(sample_path)
         assert indicator is not None
         canvas, cursor_pos = _embed(indicator)
-        assert det.is_visible(canvas, cursor_pos), \
+        assert det.is_visible(canvas, cursor_pos), (
             f"Failed to detect FT indicator from {sample_path}"
+        )
 
     def test_search_region_limits_to_area_near_cursor(self) -> None:
         det = FastTravelDetector()

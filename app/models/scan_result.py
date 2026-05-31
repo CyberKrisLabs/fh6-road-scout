@@ -12,10 +12,10 @@ class DiscoveryState(Enum):
 
 
 class RoadType(Enum):
-    ASPHALT  = "asphalt"   # white solid line
-    TUNNEL   = "tunnel"    # white solid line with subtle black centre dots
-    DIRT     = "dirt"      # orange solid line
-    OFFROAD  = "offroad"   # orange dashed line
+    ASPHALT = "asphalt"  # white solid line
+    TUNNEL = "tunnel"  # white solid line with subtle black centre dots
+    DIRT = "dirt"  # orange solid line
+    OFFROAD = "offroad"  # orange dashed line
     ALLEYWAY = "alleyway"  # cyan thin dashed line
 
 

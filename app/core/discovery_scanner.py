@@ -37,7 +37,7 @@ class DiscoveryScanner(QObject):
     """
 
     point_scanned = Signal(object)  # ScanPoint with updated state
-    progress = Signal(int, int)      # (scanned, total)
+    progress = Signal(int, int)  # (scanned, total)
     finished = Signal()
 
     def __init__(
@@ -114,9 +114,9 @@ class DiscoveryScanner(QObject):
         """Capture a wide region around (mx, my) so the FT indicator is in frame."""
         with mss.mss() as sct:
             region = {
-                "left":   max(0, mx - _CAPTURE_RADIUS),
-                "top":    max(0, my - _CAPTURE_RADIUS),
-                "width":  _CAPTURE_RADIUS * 2,
+                "left": max(0, mx - _CAPTURE_RADIUS),
+                "top": max(0, my - _CAPTURE_RADIUS),
+                "width": _CAPTURE_RADIUS * 2,
                 "height": _CAPTURE_RADIUS * 2,
             }
             shot = sct.grab(region)

@@ -86,8 +86,9 @@ class FTWizard(QDialog):
         self._capture_btn.clicked.connect(self._start_countdown)
         layout.addWidget(self._capture_btn)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok |
-                                   QDialogButtonBox.StandardButton.Cancel)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
         buttons.accepted.connect(self._on_confirm)
         buttons.rejected.connect(self.reject)
@@ -124,7 +125,7 @@ class FTWizard(QDialog):
         with mss.mss() as sct:
             region = {
                 "left": max(0, mx - _CAPTURE_W // 2),
-                "top":  max(0, my - _CAPTURE_H // 2),
+                "top": max(0, my - _CAPTURE_H // 2),
                 "width": _CAPTURE_W,
                 "height": _CAPTURE_H,
             }
@@ -142,6 +143,7 @@ class FTWizard(QDialog):
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb.shape
         from PySide6.QtGui import QImage  # avoid module-level import issue in tests
+
         qimg = QImage(rgb.data, w, h, ch * w, QImage.Format.Format_RGB888)
         px = QPixmap.fromImage(qimg).scaledToWidth(380, Qt.TransformationMode.SmoothTransformation)
         self._preview_label.setPixmap(px)

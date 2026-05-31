@@ -24,7 +24,7 @@ def _with_ft(ft_detector: FastTravelDetector) -> np.ndarray:
     template_img = cv2.imread("assets/ft_samples/ft_indicator_01_light_grey.png")
     if template_img is not None:
         h, w = template_img.shape[:2]
-        canvas[10: 10 + h, 10: 10 + w] = template_img
+        canvas[10 : 10 + h, 10 : 10 + w] = template_img
     return canvas
 
 
@@ -100,7 +100,11 @@ class TestDiscoveryScannerStopResume:
         ft = FastTravelDetector()
         scanner = DiscoveryScanner(_make_points(10), ft, dwell_ms=0)
         scanner.stop()
-        with patch(_MOVE), patch.object(scanner, "_capture", return_value=_blank()), qtbot.waitSignal(scanner.finished, timeout=1000):
+        with (
+            patch(_MOVE),
+            patch.object(scanner, "_capture", return_value=_blank()),
+            qtbot.waitSignal(scanner.finished, timeout=1000),
+        ):
             scanner.run()
 
     def test_skips_already_scanned_points(self, qtbot: QtBot) -> None:

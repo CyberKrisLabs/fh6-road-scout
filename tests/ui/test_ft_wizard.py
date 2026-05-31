@@ -27,8 +27,10 @@ class TestFTWizard:
     def test_ok_enabled_after_capture(self, qtbot: QtBot) -> None:
         dlg = FTWizard()
         qtbot.addWidget(dlg)
-        with patch("app.ui.ft_wizard.pyautogui.position", return_value=(400, 300)), \
-             patch("app.ui.ft_wizard.mss.mss") as mock_mss:
+        with (
+            patch("app.ui.ft_wizard.pyautogui.position", return_value=(400, 300)),
+            patch("app.ui.ft_wizard.mss.mss") as mock_mss,
+        ):
             mock_sct = MagicMock()
             mock_shot = MagicMock()
             # Return a valid BGRA numpy array via __array__

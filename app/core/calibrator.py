@@ -50,8 +50,9 @@ class Calibrator:
         # Derive bounding box by transforming the four corners of a unit square
         # scaled to a typical full-map extent.  The actual extents come from the
         # calibration points so this is a reasonable approximation.
-        corners_ref = np.array([[[0, 0]], [[3840, 0]], [[3840, 4096]], [[0, 4096]]],
-                               dtype=np.float32)
+        corners_ref = np.array(
+            [[[0, 0]], [[3840, 0]], [[3840, 4096]], [[0, 4096]]], dtype=np.float32
+        )
         corners_screen = cv2.transform(corners_ref, self._matrix.astype(np.float32))
         pts = corners_screen[:, 0, :]
         x1, y1 = int(pts[:, 0].min()), int(pts[:, 1].min())

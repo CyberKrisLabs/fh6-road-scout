@@ -23,13 +23,13 @@ import struct
 from pathlib import Path
 
 AI_TRACKS = Path(r"D:\SteamLibrary\steamapps\common\ForzaHorizon6\media\OpenWorld\Brio\AITracks")
-OUT_JSON  = Path(__file__).parent / "owt_waypoints.json"
-OUT_PNG   = Path(__file__).parent / "owt_preview.png"
+OUT_JSON = Path(__file__).parent / "owt_waypoints.json"
+OUT_PNG = Path(__file__).parent / "owt_preview.png"
 
-MAGIC     = b"FTWO"
-HDR_SIZE  = 0x60   # 96 bytes
-STRIDE    = 56
-COUNT_OFF = 0x24   # uint32 little-endian
+MAGIC = b"FTWO"
+HDR_SIZE = 0x60  # 96 bytes
+STRIDE = 56
+COUNT_OFF = 0x24  # uint32 little-endian
 
 
 def parse_owt(path: Path) -> list[tuple[float, float, float]]:
@@ -84,18 +84,23 @@ def main() -> None:
         print(f"World Z: {min(all_z):.0f} ... {max(all_z):.0f}")
 
     with OUT_JSON.open("w") as f:
-        json.dump({
-            "source": "AITracks/*.owt  (FTWO format)",
-            "route_count": len(all_routes),
-            "total_waypoints": total_pts,
-            "routes": all_routes,
-        }, f, separators=(",", ":"))
+        json.dump(
+            {
+                "source": "AITracks/*.owt  (FTWO format)",
+                "route_count": len(all_routes),
+                "total_waypoints": total_pts,
+                "routes": all_routes,
+            },
+            f,
+            separators=(",", ":"),
+        )
 
     print(f"Saved -> {OUT_JSON}")
 
     # Generate preview PNG
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.collections as mc
         import matplotlib.pyplot as plt
@@ -113,8 +118,12 @@ def main() -> None:
         ax.autoscale()
         ax.set_aspect("equal")
         ax.axis("off")
-        ax.set_title(f"FH6 AI Route Waypoints — {len(lines)} routes ({total_pts:,} pts)",
-                     color="white", fontsize=13, pad=8)
+        ax.set_title(
+            f"FH6 AI Route Waypoints — {len(lines)} routes ({total_pts:,} pts)",
+            color="white",
+            fontsize=13,
+            pad=8,
+        )
         plt.tight_layout()
         plt.savefig(OUT_PNG, dpi=150, bbox_inches="tight", facecolor="black")
         print(f"Preview -> {OUT_PNG}")

@@ -48,8 +48,14 @@ def find_window_region(title_contains: str) -> tuple[int, int, int, int] | None:
     w, h = rect.right - rect.left, rect.bottom - rect.top
     if w <= 0 or h <= 0 or x < -500 or y < -500:
         # Window is minimised or off-screen
-        log.debug("find_window_region: window %r is minimised or off-screen (%d,%d %dx%d)",
-                  title_contains, x, y, w, h)
+        log.debug(
+            "find_window_region: window %r is minimised or off-screen (%d,%d %dx%d)",
+            title_contains,
+            x,
+            y,
+            w,
+            h,
+        )
         return None
     # Inset by a few pixels to skip the window border/resize-handle area
     pad = 12

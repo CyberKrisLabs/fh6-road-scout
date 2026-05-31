@@ -11,12 +11,21 @@ from app.models.scan_result import DiscoveryState, RoadType, ScanPoint, ScanSess
 
 def _make_session() -> ScanSession:
     pts = [
-        ScanPoint(ref_x=10, ref_y=20, state=DiscoveryState.DISCOVERED, confidence=0.9,
-                  road_type=RoadType.ASPHALT),
-        ScanPoint(ref_x=30, ref_y=40, state=DiscoveryState.UNDISCOVERED, confidence=0.2,
-                  road_type=RoadType.DIRT),
-        ScanPoint(ref_x=50, ref_y=60, state=DiscoveryState.UNKNOWN,
-                  road_type=RoadType.TUNNEL),
+        ScanPoint(
+            ref_x=10,
+            ref_y=20,
+            state=DiscoveryState.DISCOVERED,
+            confidence=0.9,
+            road_type=RoadType.ASPHALT,
+        ),
+        ScanPoint(
+            ref_x=30,
+            ref_y=40,
+            state=DiscoveryState.UNDISCOVERED,
+            confidence=0.2,
+            road_type=RoadType.DIRT,
+        ),
+        ScanPoint(ref_x=50, ref_y=60, state=DiscoveryState.UNKNOWN, road_type=RoadType.TUNNEL),
     ]
     return ScanSession(
         points=pts,

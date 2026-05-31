@@ -27,11 +27,11 @@ _UNDISCOVERED_COLOR = QColor(255, 80, 50, 220)
 
 # Colors when a point is still UNKNOWN — show by road type (matches in-game overlay)
 _ROAD_TYPE_COLOR: dict[RoadType, QColor] = {
-    RoadType.ASPHALT:  QColor(240, 240, 255, 170),  # white
-    RoadType.TUNNEL:   QColor(180, 185, 200, 140),  # grey-white (subtle dots in-game)
-    RoadType.DIRT:     QColor(255, 150,  30, 190),  # orange solid
-    RoadType.OFFROAD:  QColor(255, 175,  70, 160),  # orange dashed (lighter)
-    RoadType.ALLEYWAY: QColor( 80, 220, 220, 170),  # cyan dashed
+    RoadType.ASPHALT: QColor(240, 240, 255, 170),  # white
+    RoadType.TUNNEL: QColor(180, 185, 200, 140),  # grey-white (subtle dots in-game)
+    RoadType.DIRT: QColor(255, 150, 30, 190),  # orange solid
+    RoadType.OFFROAD: QColor(255, 175, 70, 160),  # orange dashed (lighter)
+    RoadType.ALLEYWAY: QColor(80, 220, 220, 170),  # cyan dashed
 }
 
 _CALIB_COLOR = QColor(255, 200, 0, 255)
@@ -234,8 +234,10 @@ class MapView(QWidget):
         # Group dots by colour; QColor isn't hashable so key by rgba() int.
         color_paths: dict[int, tuple[QColor, QPainterPath]] = {}
         for pt in self._points:
-            if not (visible_img_l <= pt.ref_x <= visible_img_r and
-                    visible_img_t <= pt.ref_y <= visible_img_b):
+            if not (
+                visible_img_l <= pt.ref_x <= visible_img_r
+                and visible_img_t <= pt.ref_y <= visible_img_b
+            ):
                 continue
             if pt.state == DiscoveryState.DISCOVERED:
                 color = _DISCOVERED_COLOR
