@@ -19,10 +19,12 @@ class TestInitialState:
     def test_width_is_fixed_at_210(self, panel: ScanPanel) -> None:
         assert panel.width() == 210
 
-    def test_calibrate_disabled_initially(self, panel: ScanPanel) -> None:
-        assert not panel.btn_calibrate.isEnabled()
+    def test_calibrate_enabled_initially(self, panel: ScanPanel) -> None:
+        # Calibrate is always available — no map loading step required
+        assert panel.btn_calibrate.isEnabled()
 
     def test_start_disabled_initially(self, panel: ScanPanel) -> None:
+        # Start is gated on road points being loaded
         assert not panel.btn_start.isEnabled()
 
     def test_pause_disabled_initially(self, panel: ScanPanel) -> None:
@@ -40,38 +42,21 @@ class TestInitialState:
     def test_save_disabled_initially(self, panel: ScanPanel) -> None:
         assert not panel.btn_save.isEnabled()
 
-    def test_load_enabled_initially(self, panel: ScanPanel) -> None:
-        assert panel.btn_load.isEnabled()
-
     def test_load_session_enabled_initially(self, panel: ScanPanel) -> None:
         assert panel.btn_load_session.isEnabled()
 
 
-class TestSetMapLoaded:
-    def test_true_enables_calibrate(self, panel: ScanPanel) -> None:
-        panel.set_map_loaded(True)
-        assert panel.btn_calibrate.isEnabled()
-
-    def test_true_enables_start(self, panel: ScanPanel) -> None:
-        panel.set_map_loaded(True)
+class TestSetRoadPointsReady:
+    def test_enables_start(self, panel: ScanPanel) -> None:
+        panel.set_road_points_ready(100)
         assert panel.btn_start.isEnabled()
 
-    def test_false_disables_calibrate(self, panel: ScanPanel) -> None:
-        panel.set_map_loaded(True)
-        panel.set_map_loaded(False)
-        assert not panel.btn_calibrate.isEnabled()
-
-    def test_false_disables_start(self, panel: ScanPanel) -> None:
-        panel.set_map_loaded(True)
-        panel.set_map_loaded(False)
-        assert not panel.btn_start.isEnabled()
+    def test_updates_status_text(self, panel: ScanPanel) -> None:
+        panel.set_road_points_ready(48476)
+        assert "48,476" in panel.lbl_status.text()
 
 
 class TestSetScanRunning:
-    def test_running_true_disables_load(self, panel: ScanPanel) -> None:
-        panel.set_scan_running(True)
-        assert not panel.btn_load.isEnabled()
-
     def test_running_true_disables_calibrate(self, panel: ScanPanel) -> None:
         panel.set_scan_running(True)
         assert not panel.btn_calibrate.isEnabled()
@@ -88,10 +73,10 @@ class TestSetScanRunning:
         panel.set_scan_running(True)
         assert panel.btn_stop.isEnabled()
 
-    def test_running_false_re_enables_load(self, panel: ScanPanel) -> None:
+    def test_running_false_re_enables_calibrate(self, panel: ScanPanel) -> None:
         panel.set_scan_running(True)
         panel.set_scan_running(False)
-        assert panel.btn_load.isEnabled()
+        assert panel.btn_calibrate.isEnabled()
 
     def test_running_false_disables_pause(self, panel: ScanPanel) -> None:
         panel.set_scan_running(True)
@@ -157,17 +142,12 @@ class TestSetStatus:
 
 
 class TestSignals:
-    def test_load_map_signal(self, panel: ScanPanel, qtbot: QtBot) -> None:
-        with qtbot.waitSignal(panel.load_map_requested, timeout=500):
-            qtbot.mouseClick(panel.btn_load, Qt.MouseButton.LeftButton)
-
     def test_calibrate_signal(self, panel: ScanPanel, qtbot: QtBot) -> None:
-        panel.set_map_loaded(True)
         with qtbot.waitSignal(panel.calibrate_requested, timeout=500):
             qtbot.mouseClick(panel.btn_calibrate, Qt.MouseButton.LeftButton)
 
     def test_scan_start_signal(self, panel: ScanPanel, qtbot: QtBot) -> None:
-        panel.set_map_loaded(True)
+        panel.set_road_points_ready(10)
         with qtbot.waitSignal(panel.scan_start_requested, timeout=500):
             qtbot.mouseClick(panel.btn_start, Qt.MouseButton.LeftButton)
 

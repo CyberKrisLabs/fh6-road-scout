@@ -68,6 +68,14 @@ class MapView(QWidget):
 
     _MAX_DISPLAY_PX = 1920  # max dimension of the display pixmap
 
+    def load_builtin_map(self) -> None:
+        """Load the pre-generated road_map.png bundled with the application."""
+        from app.utils.paths import asset
+
+        path = asset("road_map.png")
+        if not self.load_image(str(path)):
+            log.warning("Built-in road_map.png not found at %s", path)
+
     def load_image(self, path: str) -> bool:
         img = QPixmap(path)
         if img.isNull():
