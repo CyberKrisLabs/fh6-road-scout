@@ -1,4 +1,4 @@
-"""Integration tests for MainWindow: wiring, load-map flow, window properties."""
+"""Integration tests for MainWindow: wiring, startup, window properties."""
 
 import json
 from pathlib import Path
@@ -10,14 +10,12 @@ from pytestqt.qtbot import QtBot
 from app.ui.main_window import MainWindow
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
-ROAD_MAP = FIXTURES / "road_map.png"
-MISSING_PATH = str(FIXTURES / "does_not_exist.png")
 
 
 @pytest.fixture
 def window(qtbot: QtBot) -> MainWindow:
-    # Suppress auto-load so tests start with a clean (unloaded) state
-    with patch("app.ui.main_window.MainWindow._autoload_season"):
+    # Suppress startup so tests begin with a clean, empty state
+    with patch("app.ui.main_window.MainWindow._startup"):
         win = MainWindow()
     qtbot.addWidget(win)
     win.show()
@@ -29,8 +27,6 @@ class TestWindowProperties:
         assert window.windowTitle() == "Horizon Scout"
 
     def test_initial_size(self, window: MainWindow) -> None:
-        # Use sizeHint from the resize() call rather than actual rendered size,
-        # which can be constrained by the CI screen resolution
         assert window.width() >= 400
         assert window.height() >= 300
 
@@ -38,69 +34,48 @@ class TestWindowProperties:
         assert window._session.total == 0
 
 
-class TestLoadMap:
-    def test_loading_invalid_path_does_not_crash(self, window: MainWindow) -> None:
-        with patch("app.ui.main_window.QMessageBox.critical"):
-            window._load_map(MISSING_PATH)  # must not raise
-
-    def test_loading_invalid_path_leaves_start_disabled(self, window: MainWindow) -> None:
-        with patch("app.ui.main_window.QMessageBox.critical"):
-            window._load_map(MISSING_PATH)
-        assert not window._panel.btn_start.isEnabled()
-
-    def test_loading_valid_image_enables_start(self, window: MainWindow) -> None:
-        window._load_map(str(ROAD_MAP))
-        assert window._panel.btn_start.isEnabled()
-
-    def test_loading_valid_image_enables_calibrate(self, window: MainWindow) -> None:
-        window._load_map(str(ROAD_MAP))
-        assert window._panel.btn_calibrate.isEnabled()
-
-    def test_loading_valid_image_sets_ref_map_path(self, window: MainWindow) -> None:
-        window._load_map(str(ROAD_MAP))
-        assert window._ref_map_path == str(ROAD_MAP)
-
-    def test_loading_valid_image_does_not_sample_roads(self, window: MainWindow) -> None:
-        """Season maps are backgrounds only — road sampling must not run on load."""
-        window._load_map(str(ROAD_MAP))
-        assert window._session.total == 0  # no road points until road_points.json exists
-
-    def test_loading_valid_image_updates_map_view(self, window: MainWindow) -> None:
-        window._load_map(str(ROAD_MAP))
-        assert window._map_view._pixmap is not None
-
-
-class TestRoadPointsLoading:
-    def test_road_points_loaded_from_json_when_present(
-        self, window: MainWindow, tmp_path: Path
-    ) -> None:
-        road_pts = {
-            "points": [
-                {"x": 10, "y": 20, "state": "unknown", "conf": 0.0},
-                {"x": 30, "y": 40, "state": "unknown", "conf": 0.0},
-            ]
+class TestWorldRoadPointsLoading:
+    def _make_world_json(self, tmp_path: Path, n: int = 3) -> Path:
+        data = {
+            "format": "world_road_points_v1",
+            "points": [{"world_x": float(i * 100), "world_z": float(i * 200)} for i in range(n)],
         }
-        road_json = tmp_path / "road_points.json"
-        road_json.write_text(json.dumps(road_pts), encoding="utf-8")
-        with patch("app.ui.main_window.asset", return_value=road_json):
-            window._try_load_road_points()
-        assert window._session.total == 2
+        p = tmp_path / "world_road_points.json"
+        p.write_text(json.dumps(data), encoding="utf-8")
+        return p
 
-    def test_missing_road_points_file_leaves_session_empty(
-        self, window: MainWindow, tmp_path: Path
-    ) -> None:
-        nonexistent = tmp_path / "no_road_points.json"
+    def test_loads_points_into_session(self, window: MainWindow, tmp_path: Path) -> None:
+        p = self._make_world_json(tmp_path, n=5)
+        with patch("app.ui.main_window.asset", return_value=p):
+            window._load_world_road_points()
+        assert window._session.total == 5
+
+    def test_points_have_ref_coords(self, window: MainWindow, tmp_path: Path) -> None:
+        p = self._make_world_json(tmp_path, n=1)
+        with patch("app.ui.main_window.asset", return_value=p):
+            window._load_world_road_points()
+        pt = window._session.points[0]
+        assert isinstance(pt.ref_x, int)
+        assert isinstance(pt.ref_y, int)
+
+    def test_missing_file_leaves_session_empty(self, window: MainWindow, tmp_path: Path) -> None:
+        nonexistent = tmp_path / "no_file.json"
         with patch("app.ui.main_window.asset", return_value=nonexistent):
-            window._try_load_road_points()
+            window._load_world_road_points()
         assert window._session.total == 0
+
+    def test_successful_load_enables_start(self, window: MainWindow, tmp_path: Path) -> None:
+        p = self._make_world_json(tmp_path, n=2)
+        with patch("app.ui.main_window.asset", return_value=p):
+            window._load_world_road_points()
+        assert window._panel.btn_start.isEnabled()
 
 
 class TestWindowClose:
     def test_close_does_not_raise_without_scanner(self, window: MainWindow, qtbot: QtBot) -> None:
-        window.close()  # must not raise
+        window.close()
 
     def test_close_stops_scanner_if_running(self, window: MainWindow, qtbot: QtBot) -> None:
-
         mock_scanner = MagicMock()
         window._scanner = mock_scanner
         window.close()

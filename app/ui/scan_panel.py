@@ -21,8 +21,6 @@ log = logging.getLogger(__name__)
 class ScanPanel(QWidget):
     """Left-side control panel."""
 
-    season_selected = Signal(str)
-    load_map_requested = Signal()
     calibrate_requested = Signal()
     capture_ft_template_requested = Signal()
     scan_start_requested = Signal()
@@ -55,36 +53,8 @@ class ScanPanel(QWidget):
 
         root.addWidget(_hr())
 
-        root.addWidget(_section_label("SEASON"))
-        season_row1 = QHBoxLayout()
-        season_row1.setSpacing(4)
-        self.btn_spring = _btn("Spring")
-        self.btn_summer = _btn("Summer")
-        self.btn_spring.clicked.connect(lambda: self.season_selected.emit("spring"))
-        self.btn_summer.clicked.connect(lambda: self.season_selected.emit("summer"))
-        season_row1.addWidget(self.btn_spring)
-        season_row1.addWidget(self.btn_summer)
-        root.addLayout(season_row1)
-
-        season_row2 = QHBoxLayout()
-        season_row2.setSpacing(4)
-        self.btn_autumn = _btn("Autumn")
-        self.btn_winter = _btn("Winter")
-        self.btn_autumn.clicked.connect(lambda: self.season_selected.emit("autumn"))
-        self.btn_winter.clicked.connect(lambda: self.season_selected.emit("winter"))
-        season_row2.addWidget(self.btn_autumn)
-        season_row2.addWidget(self.btn_winter)
-        root.addLayout(season_row2)
-
-        root.addWidget(_hr())
-
         root.addWidget(_section_label("MAP"))
-        self.btn_load = _btn("Load Reference Map", primary=True)
-        self.btn_load.clicked.connect(self.load_map_requested)
-        root.addWidget(self.btn_load)
-
-        self.btn_calibrate = _btn("Calibrate")
-        self.btn_calibrate.setEnabled(False)
+        self.btn_calibrate = _btn("Calibrate", primary=True)
         self.btn_calibrate.clicked.connect(self.calibrate_requested)
         root.addWidget(self.btn_calibrate)
 
@@ -181,15 +151,15 @@ class ScanPanel(QWidget):
     def set_status(self, text: str) -> None:
         self.lbl_status.setText(text)
 
-    def set_map_loaded(self, loaded: bool) -> None:
-        self.btn_calibrate.setEnabled(loaded)
-        self.btn_start.setEnabled(loaded)
+    def set_road_points_ready(self, count: int) -> None:
+        """Called once world_road_points.json is loaded successfully."""
+        self.btn_start.setEnabled(True)
+        self.set_status(f"Ready — {count:,} road points loaded.")
 
     def set_scan_running(self, running: bool, paused: bool = False) -> None:
         self.btn_start.setEnabled(not running)
         self.btn_pause.setEnabled(running)
         self.btn_stop.setEnabled(running or paused)
-        self.btn_load.setEnabled(not running)
         self.btn_calibrate.setEnabled(not running)
 
     def update_progress(self, scanned: int, total: int, discovered: int, undiscovered: int) -> None:
