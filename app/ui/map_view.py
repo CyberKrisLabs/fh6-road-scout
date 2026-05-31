@@ -202,7 +202,7 @@ class MapView(QWidget):
             painter.drawText(
                 self.rect(),
                 Qt.AlignmentFlag.AlignCenter,
-                "Load a reference map to begin",
+                "Loading road map...",
             )
             return
 
@@ -252,7 +252,7 @@ class MapView(QWidget):
             elif pt.state == DiscoveryState.UNDISCOVERED:
                 color = _UNDISCOVERED_COLOR
             else:
-                color = _ROAD_TYPE_COLOR[pt.road_type]
+                continue  # UNKNOWN points are not rendered until scanned
             w_pt = self._img_to_widget(QPointF(pt.ref_x, pt.ref_y))
             key = color.rgba()
             entry = color_paths.get(key)
