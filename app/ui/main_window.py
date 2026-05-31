@@ -113,7 +113,12 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_calibrate(self) -> None:
-        pass  # implemented in P3
+        from app.ui.calibration_wizard import CalibrationWizard
+
+        dlg = CalibrationWizard(self._calibrator, self)
+        if dlg.exec() == CalibrationWizard.DialogCode.Accepted:
+            save_calibration(self._calibrator)
+            self._panel.set_status("Calibrated — ready to scan.")
 
     def _on_capture_ft_template(self) -> None:
         from app.ui.ft_wizard import FTWizard
