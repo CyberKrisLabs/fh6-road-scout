@@ -38,6 +38,10 @@ class MainWindow(QMainWindow):
         self._scanner: Scanner | None = None
         self._scan_thread: QThread | None = None
         self._next_gap_index: int = -1
+        self._scan_countdown: int = 0
+        self._scan_countdown_timer = QTimer(self)
+        self._scan_countdown_timer.setInterval(1000)
+        self._scan_countdown_timer.timeout.connect(self._scan_countdown_tick)
 
         load_calibration(self._calibrator)
         self._build_ui()
@@ -126,15 +130,28 @@ class MainWindow(QMainWindow):
         dlg = FTWizard(self)
         dlg.exec()
 
+    _SCAN_DELAY = 5  # seconds to switch to the game before scanning begins
+
     def _on_scan_start(self) -> None:
         if not self._calibrator.is_fitted:
-            QMessageBox.warning(
-                self,
-                "Not Calibrated",
-                "Please calibrate before scanning.",
-            )
+            QMessageBox.warning(self, "Not Calibrated", "Please calibrate before scanning.")
             return
+        self._scan_countdown = self._SCAN_DELAY
+        self._panel.btn_start.setEnabled(False)
+        self._panel.set_status(
+            f"Starting in {self._scan_countdown}s — switch to game and open the map…"
+        )
+        self._scan_countdown_timer.start()
 
+    def _scan_countdown_tick(self) -> None:
+        self._scan_countdown -= 1
+        if self._scan_countdown > 0:
+            self._panel.set_status(f"Starting in {self._scan_countdown}s — switch to game now…")
+            return
+        self._scan_countdown_timer.stop()
+        self._launch_scan()
+
+    def _launch_scan(self) -> None:
         ft_path = str(asset("ft_indicator.png")) if asset("ft_indicator.png").exists() else ""
         self._scanner = Scanner(
             points=self._session.points,
@@ -159,6 +176,9 @@ class MainWindow(QMainWindow):
             self._panel.set_scan_running(False, paused=True)
 
     def _on_scan_stop(self) -> None:
+        if self._scan_countdown_timer.isActive():
+            self._scan_countdown_timer.stop()
+            self._panel.btn_start.setEnabled(True)
         if self._scanner:
             self._scanner.stop()
         self._panel.set_status("Stopped.")
