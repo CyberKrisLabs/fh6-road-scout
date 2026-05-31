@@ -61,29 +61,46 @@ cause the road cursor to track along nearby roads.
 
 The app operates in two distinct modes:
 
-### Mode A — Road Mapping (one-time, developer or power-user)
-Move the primary cursor in a raster scan across the full map. At each step:
-1. Capture the screen
-2. Detect the position of the road cursor (two concentric white circles)
-3. Record the road cursor screen coordinate
+### Mode A — Road Database (pre-built from game files — replaces cursor scan)
 
-Result: a complete database of all road positions on the map (`assets/road_points.json`).
-This replaces image-based road detection from satellite/promotional maps.
+Road positions are extracted directly from the game's binary AI-track files instead
+of runtime cursor detection.  The source data lives in:
+
+```
+D:\SteamLibrary\steamapps\common\ForzaHorizon6\media\OpenWorld\Brio\AITracks\
+```
+
+167 `Route*.owt` files use the **FTWO binary format** (56-byte records):
+- Bytes 0–11: `float32 X, Y, Z` — game world position
+- Bytes 12–55: tangent vectors, accumulated distance, flags
+
+Extraction script: `assets/game_files/parse_owt.py`
+Build script:      `assets/game_files/build_world_road_points.py`
+
+Result: **`assets/world_road_points.json`** — 48,476 unique road points on a 15 m
+dedup grid, in game-world (X, Z) coordinates.
+
+> **Coordinate system:** game world units (metres).  X ≈ −8,053 … +11,022,
+> Z ≈ −9,492 … +20,163.  Calibration (Phase 3) maps (world_x, world_z) to
+> (ref_x, ref_y) pixel coordinates on the reference map.
+
+The cursor-based `RoadMapper` class (and `road_points.json`) is superseded by this
+approach and will eventually be removed.
 
 ### Mode B — Discovery Scan (repeated by each player)
-Move the primary cursor in the same raster scan. At each step:
-1. Capture the screen
-2. Detect the road cursor position
-3. Detect whether the fast travel indicator is present
-4. Road positions **without** the fast travel indicator = undiscovered roads
+For each road point in `world_road_points.json`:
+1. Apply calibration to convert world (X, Z) → in-game map screen position
+2. Move the mouse to that screen position
+3. Capture the screen and detect whether the fast travel indicator is present
+4. Record the road as discovered or undiscovered
 
 Result: a list of undiscovered road points, highlighted on the reference map.
 
-### Why cursor tracking beats image analysis
-- The game engine already knows where every road is; the road cursor exposes that
-- No HSV tuning, no coordinate alignment between different map images
-- Works for all road types (including alleyways) automatically
-- Authoritative: directly from the live game state
+### Why game-file extraction beats cursor tracking
+- Zero false positives — positions are authoritative, not inferred from vision
+- No scrolling, no settle delays, no cursor detection failures
+- Works offline (no game running during data extraction)
+- One-time extraction; all players share the same `world_road_points.json`
 
 ---
 
@@ -218,22 +235,22 @@ fh6-road-scout/
 | P1-S5 | `MainWindow` wiring: load map triggers road sampling overlay |
 | P1-S6 | Dark theme (orange/black) applied globally |
 
-### Phase 2 — Road Cursor Tracker (Road Mapping)
+### Phase 2 — Road Database (from game files — replaces cursor mapping)
 | Story | Description |
 |---|---|
-| P2-S1 | `RoadCursorDetector`: detect the two-concentric-circles road cursor in a screenshot + tests |
-| P2-S2 | `RasterScanner`: move mouse in configurable grid pattern across map region + tests |
-| P2-S3 | `RoadMapper`: raster scan → collect road cursor positions → `road_points.json` + tests |
-| P2-S4 | `RoadType` classification from cursor colour heuristic (white/orange/cyan) + tests |
-| P2-S5 | Mapping UI: start/pause/stop mapping, progress bar, ETA |
+| P2-S1 | ~~`RoadCursorDetector`~~ — **superseded**; road positions come from game files |
+| P2-S2 | ~~`RasterScanner`~~ — still used in discovery scan; road mapping raster not needed |
+| P2-S3 | ~~`RoadMapper`~~ — **superseded**; `assets/world_road_points.json` is the source |
+| P2-S4 | ~~`RoadType` from cursor heuristic~~ — road type TBD (all default to `asphalt` for now) |
+| P2-S5 | Load `world_road_points.json` at startup; expose world coords to calibrator + scanner |
 
 ### Phase 3 — Calibration
 | Story | Description |
 |---|---|
 | P3-S1 | `Calibrator.fit()`: affine transform from 3 point pairs + tests |
-| P3-S2 | `Calibrator.transform()`: screen coordinate → ref map coordinate + tests |
+| P3-S2 | `Calibrator.transform()`: **world (X, Z) → ref map (px, py)** + tests |
 | P3-S3 | `Calibrator` serialise/deserialise (QSettings) + tests |
-| P3-S4 | `CalibrationWizard` dialog: click 3 known points on in-game map + tests |
+| P3-S4 | `CalibrationWizard` dialog: click 3 known world landmarks on in-game map + tests |
 | P3-S5 | `CalibrationWizard` dialog: capture corresponding ref map clicks (F9 hotkey) |
 
 ### Phase 4 — Fast Travel Detector & Discovery Scan
@@ -274,3 +291,6 @@ fh6-road-scout/
 | Multi-monitor | Monitor selector dropdown added to Settings dialog (P6-S1) |
 | Branch naming | `feature/P1-S2-short-description` / `fix/P4-S3-short-description` |
 | Asset paths | `app/utils/paths.py` — single helper used everywhere, handles `sys._MEIPASS` |
+| Road database | `assets/world_road_points.json` (game-file extraction, FTWO parser); replaces cursor-based road mapping |
+| Road coordinates | Game world (X, Z) in metres; calibration maps to ref-map pixel coords at runtime |
+| Road type | All points default to `asphalt` until type classification is implemented |

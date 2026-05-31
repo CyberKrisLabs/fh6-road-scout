@@ -7,12 +7,13 @@ import mss
 import numpy as np
 import pyautogui
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -37,12 +38,18 @@ class FTWizard(QDialog):
       4. User confirms the preview looks correct.
     """
 
+    _COUNTDOWN_SECS = 8
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Capture Fast Travel Template")
         self.setMinimumWidth(420)
         self._captured_img: np.ndarray | None = None
         self._out_path = str(asset("ft_indicator.png"))
+        self._countdown_remaining = 0
+        self._timer = QTimer(self)
+        self._timer.setInterval(1000)
+        self._timer.timeout.connect(self._tick)
         self._build_ui()
         self._setup_hotkey()
 
@@ -56,9 +63,10 @@ class FTWizard(QDialog):
 
         instruction = QLabel(
             "<b>Step 1:</b> Switch to the game and open the world map.<br>"
-            "<b>Step 2:</b> Hover the cursor over a road you have already discovered.<br>"
-            "   The <i>Fast Travel</i> button should appear near the cursor.<br>"
-            "<b>Step 3:</b> Press <b>F9</b> to capture the indicator.<br><br>"
+            "<b>Step 2:</b> Hover the cursor over a road you have already discovered<br>"
+            "   so the <i>Fast Travel</i> button is visible.<br>"
+            "<b>Step 3:</b> Click <b>Start Capture</b> below, then switch to the game.<br>"
+            "   The screenshot is taken automatically when the countdown ends.<br><br>"
             "The preview below will show what was captured."
         )
         instruction.setWordWrap(True)
@@ -71,9 +79,13 @@ class FTWizard(QDialog):
         self._preview_label.setStyleSheet("border: 1px solid grey; background: #1a1a1f;")
         layout.addWidget(self._preview_label)
 
-        self._status_label = QLabel("Waiting for F9…")
+        self._status_label = QLabel("Click 'Start Capture' when ready.")
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._status_label)
+
+        self._capture_btn = QPushButton("Start Capture (8s countdown)")
+        self._capture_btn.clicked.connect(self._start_countdown)
+        layout.addWidget(self._capture_btn)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok |
                                    QDialogButtonBox.StandardButton.Cancel)
@@ -84,13 +96,29 @@ class FTWizard(QDialog):
         layout.addWidget(buttons)
 
     def _setup_hotkey(self) -> None:
-        sc = QShortcut(QKeySequence("F9"), self)
-        sc.setContext(Qt.ShortcutContext.WindowShortcut)
-        sc.activated.connect(self._capture)
+        pass  # no hotkey needed — countdown does the capture
 
     # ------------------------------------------------------------------
-    # Capture
+    # Countdown + capture
     # ------------------------------------------------------------------
+
+    def _start_countdown(self) -> None:
+        self._countdown_remaining = self._COUNTDOWN_SECS
+        self._capture_btn.setEnabled(False)
+        self._status_label.setText(
+            f"Switch to the game NOW — capturing in {self._countdown_remaining}s…"
+        )
+        self._timer.start()
+
+    def _tick(self) -> None:
+        self._countdown_remaining -= 1
+        if self._countdown_remaining > 0:
+            self._status_label.setText(
+                f"Switch to the game NOW — capturing in {self._countdown_remaining}s…"
+            )
+        else:
+            self._timer.stop()
+            self._capture()
 
     def _capture(self) -> None:
         mx, my = pyautogui.position()
@@ -105,8 +133,10 @@ class FTWizard(QDialog):
         bgr: np.ndarray = cv2.cvtColor(np.array(shot), cv2.COLOR_BGRA2BGR)
         self._captured_img = bgr
         self._show_preview(bgr)
-        self._status_label.setText("Captured!  Check the preview looks correct, then click OK.")
+        self._status_label.setText("Captured! Check the preview looks correct, then click OK.")
         self._ok_btn.setEnabled(True)
+        self._capture_btn.setEnabled(True)
+        self._capture_btn.setText("Re-capture (8s countdown)")
         log.debug("FT template captured: %dx%d", bgr.shape[1], bgr.shape[0])
 
     def _show_preview(self, bgr: np.ndarray) -> None:

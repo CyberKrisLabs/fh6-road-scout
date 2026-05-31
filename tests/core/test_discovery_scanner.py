@@ -10,7 +10,6 @@ from pytestqt.qtbot import QtBot
 
 from app.core.discovery_scanner import DiscoveryScanner
 from app.core.fast_travel_detector import FastTravelDetector
-from app.core.road_cursor_detector import RoadCursorDetector
 from app.models.scan_result import DiscoveryState, ScanPoint
 
 _MOVE = "app.core.discovery_scanner.pyautogui.moveTo"
@@ -39,7 +38,7 @@ class TestDiscoveryScannerBasic:
     def test_emits_point_scanned_for_each_point(self, qtbot: QtBot) -> None:
         ft = FastTravelDetector()
         ft.load_template(_TEMPLATE)
-        scanner = DiscoveryScanner(_make_points(3), RoadCursorDetector(), ft, dwell_ms=0)
+        scanner = DiscoveryScanner(_make_points(3), ft, dwell_ms=0)
         scanned: list[ScanPoint] = []
         scanner.point_scanned.connect(scanned.append)
         with patch(_MOVE), patch.object(scanner, "_capture", return_value=_blank()):
@@ -49,7 +48,7 @@ class TestDiscoveryScannerBasic:
     def test_marks_undiscovered_when_ft_absent(self, qtbot: QtBot) -> None:
         ft = FastTravelDetector()
         ft.load_template(_TEMPLATE)
-        scanner = DiscoveryScanner(_make_points(2), RoadCursorDetector(), ft, dwell_ms=0)
+        scanner = DiscoveryScanner(_make_points(2), ft, dwell_ms=0)
         scanned: list[ScanPoint] = []
         scanner.point_scanned.connect(scanned.append)
         # Blank screenshot → no FT indicator
@@ -61,7 +60,7 @@ class TestDiscoveryScannerBasic:
         ft = FastTravelDetector()
         ft.load_template(_TEMPLATE)
         canvas = _with_ft(ft)
-        scanner = DiscoveryScanner(_make_points(1), RoadCursorDetector(), ft, dwell_ms=0)
+        scanner = DiscoveryScanner(_make_points(1), ft, dwell_ms=0)
         scanned: list[ScanPoint] = []
         scanner.point_scanned.connect(scanned.append)
         with patch(_MOVE), patch.object(scanner, "_capture", return_value=canvas):
@@ -70,7 +69,7 @@ class TestDiscoveryScannerBasic:
 
     def test_progress_signal_fires_for_each_point(self, qtbot: QtBot) -> None:
         ft = FastTravelDetector()
-        scanner = DiscoveryScanner(_make_points(4), RoadCursorDetector(), ft, dwell_ms=0)
+        scanner = DiscoveryScanner(_make_points(4), ft, dwell_ms=0)
         progress: list[tuple[int, int]] = []
         scanner.progress.connect(lambda c, t: progress.append((c, t)))
         with patch(_MOVE), patch.object(scanner, "_capture", return_value=_blank()):
@@ -81,7 +80,7 @@ class TestDiscoveryScannerBasic:
 
     def test_finished_emitted_after_all_points(self, qtbot: QtBot) -> None:
         ft = FastTravelDetector()
-        scanner = DiscoveryScanner(_make_points(2), RoadCursorDetector(), ft, dwell_ms=0)
+        scanner = DiscoveryScanner(_make_points(2), ft, dwell_ms=0)
         done: list[bool] = []
         scanner.finished.connect(lambda: done.append(True))
         with patch(_MOVE), patch.object(scanner, "_capture", return_value=_blank()):
@@ -90,7 +89,7 @@ class TestDiscoveryScannerBasic:
 
     def test_empty_point_list_emits_finished(self, qtbot: QtBot) -> None:
         ft = FastTravelDetector()
-        scanner = DiscoveryScanner([], RoadCursorDetector(), ft, dwell_ms=0)
+        scanner = DiscoveryScanner([], ft, dwell_ms=0)
         done: list[bool] = []
         scanner.finished.connect(lambda: done.append(True))
         with patch(_MOVE), patch.object(scanner, "_capture", return_value=_blank()):
@@ -101,7 +100,7 @@ class TestDiscoveryScannerBasic:
 class TestDiscoveryScannerStopResume:
     def test_stop_before_run_emits_finished_immediately(self, qtbot: QtBot) -> None:
         ft = FastTravelDetector()
-        scanner = DiscoveryScanner(_make_points(10), RoadCursorDetector(), ft, dwell_ms=0)
+        scanner = DiscoveryScanner(_make_points(10), ft, dwell_ms=0)
         scanner.stop()
         with patch(_MOVE), patch.object(scanner, "_capture", return_value=_blank()):
             with qtbot.waitSignal(scanner.finished, timeout=1000):
@@ -111,7 +110,7 @@ class TestDiscoveryScannerStopResume:
         pts = _make_points(3)
         pts[0].state = DiscoveryState.DISCOVERED  # already scanned
         ft = FastTravelDetector()
-        scanner = DiscoveryScanner(pts, RoadCursorDetector(), ft, dwell_ms=0)
+        scanner = DiscoveryScanner(pts, ft, dwell_ms=0)
         scanned: list[ScanPoint] = []
         scanner.point_scanned.connect(scanned.append)
         with patch(_MOVE), patch.object(scanner, "_capture", return_value=_blank()):
